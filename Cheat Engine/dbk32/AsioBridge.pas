@@ -350,25 +350,16 @@ begin
   result := SendRecv(opcode, dummy, 0, respData, respCapacity, respSize, status);
 end;
 
-function AsioConnect(const pipeName: string): boolean;
+function TryPipeConnect(const pn: string): boolean;
 var
-  pn: string;
   pingStatus: int32;
   pingRespSize: uint64;
   dummy: byte;
 begin
   result := false;
-  AsioDisconnect;
-
-  if pipeName = '' then pn := ASIO_R0_DEFAULT_PIPE else pn := pipeName;
-
   hPipe := CreateFile(PChar(pn), GENERIC_READ or GENERIC_WRITE,
                       0, nil, OPEN_EXISTING, 0, 0);
-  if hPipe = INVALID_HANDLE_VALUE then
-  begin
-    lastError := 'Connect: ' + SysErrorMessage(GetLastError);
-    exit;
-  end;
+  if hPipe = INVALID_HANDLE_VALUE then exit;
 
   if SendRecvNoPayload(ASIO_OP_PING, dummy, 0, pingRespSize, pingStatus) and
      (pingStatus = ASIO_OK) then
@@ -378,9 +369,58 @@ begin
   end
   else
   begin
-    lastError := 'Ping failed';
-    AsioDisconnect;
+    CloseHandle(hPipe);
+    hPipe := INVALID_HANDLE_VALUE;
   end;
+end;
+
+function DiscoverPipeName: string;
+var
+  tmpDir: array[0..MAX_PATH-1] of char;
+  hintPath: string;
+  sl: TStringList;
+begin
+  result := '';
+  GetTempPath(MAX_PATH, @tmpDir[0]);
+  hintPath := IncludeTrailingPathDelimiter(string(tmpDir)) + 'asio_pipe_name.txt';
+  if not FileExists(hintPath) then exit;
+  sl := TStringList.Create;
+  try
+    sl.LoadFromFile(hintPath);
+    if sl.Count > 0 then
+      result := Trim(sl[0]);
+  finally
+    sl.Free;
+  end;
+end;
+
+function AsioConnect(const pipeName: string): boolean;
+var
+  pn, hintName: string;
+begin
+  result := false;
+  AsioDisconnect;
+
+  if pipeName <> '' then
+  begin
+    result := TryPipeConnect(pipeName);
+    if not result then
+      lastError := 'Connect: ' + SysErrorMessage(GetLastError);
+    exit;
+  end;
+
+  // 1. Try hint file (server writes actual pipe name with PID suffix)
+  hintName := DiscoverPipeName;
+  if hintName <> '' then
+  begin
+    result := TryPipeConnect(hintName);
+    if result then exit;
+  end;
+
+  // 2. Try default pipe name
+  result := TryPipeConnect(ASIO_R0_DEFAULT_PIPE);
+  if not result then
+    lastError := 'Connect: no pipe found (tried hint + default)';
 end;
 
 procedure AsioDisconnect;

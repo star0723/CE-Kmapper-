@@ -3233,6 +3233,17 @@ var le: integer;
 begin
   outputdebugstring('DBK32Initialize');
 
+  // Try AsioR0 pipe connection first — if the server is running, skip driver loading entirely
+  if not AsioReady then
+  begin
+    if AsioConnect then
+      outputdebugstring('DBK32Initialize: AsioR0 pipe connected — using R0 backend')
+    else
+      outputdebugstring('DBK32Initialize: AsioR0 pipe not available, falling back to driver');
+  end;
+
+  if AsioReady then exit;  // R0 pipe is ready, no need for kernel driver
+
   if not requiresAdmin('DBK driver') then exit;
 
   try
