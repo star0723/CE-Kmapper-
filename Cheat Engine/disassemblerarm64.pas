@@ -1,4 +1,4 @@
-//copyright Cheat Engine 2022. All rights reserved
+//copyright DataViewer 2022. All rights reserved
 unit DisAssemblerARM64;
 
 {$mode objfpc}{$H+}

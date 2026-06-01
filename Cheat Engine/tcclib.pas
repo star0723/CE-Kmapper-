@@ -1230,17 +1230,17 @@ begin
   {$ifdef windows}
 
   {$ifdef cpu32}
-  module:=LoadLibrary({$ifdef standalonetest}'D:\git\cheat-engine\Cheat Engine\bin\'+{$endif}'tcc32-32.dll'); //generates 32-bit code
+  module:=LoadLibrary({$ifdef standalonetest}'D:\git\cheat-engine\DataViewer\bin\'+{$endif}'tcc32-32.dll'); //generates 32-bit code
   if module=0 then
     notworkingreason:='tcc32-32.dll can not be found';
 
   {$else}
   module:=0;
   case target of
-    i386: p:={$ifdef standalonetest}'D:\git\cheat-engine\Cheat Engine\bin\'+{$endif}'tcc64-32.dll';
-    x86_64:  p:={$ifdef standalonetest}'D:\git\cheat-engine\Cheat Engine\bin\'+{$endif}'tcc64-64.dll';
-    i386_sysv: p:={$ifdef standalonetest}'D:\git\cheat-engine\Cheat Engine\bin\'+{$endif}'tcc64-32-linux.dll';
-    x86_64_sysv: p:={$ifdef standalonetest}'D:\git\cheat-engine\Cheat Engine\bin\'+{$endif}'tcc64-64-linux.dll';
+    i386: p:={$ifdef standalonetest}'D:\git\cheat-engine\DataViewer\bin\'+{$endif}'tcc64-32.dll';
+    x86_64:  p:={$ifdef standalonetest}'D:\git\cheat-engine\DataViewer\bin\'+{$endif}'tcc64-64.dll';
+    i386_sysv: p:={$ifdef standalonetest}'D:\git\cheat-engine\DataViewer\bin\'+{$endif}'tcc64-32-linux.dll';
+    x86_64_sysv: p:={$ifdef standalonetest}'D:\git\cheat-engine\DataViewer\bin\'+{$endif}'tcc64-64-linux.dll';
     else
       p:='';
   end;
@@ -1253,7 +1253,7 @@ begin
   {$else}
   if target=aarch64 then
   begin
-    p:={$ifdef standalonetest}'/Users/ericheijnen/Documents/GitHub/cheat-engine/Cheat Engine/bin/tcc/Release/'+{$endif}'libtcc_arm64.dylib';
+    p:={$ifdef standalonetest}'/Users/ericheijnen/Documents/GitHub/cheat-engine/DataViewer/bin/tcc/Release/'+{$endif}'libtcc_arm64.dylib';
     module:=loadlibrary(p);
 
     if module=0 then
@@ -1462,11 +1462,11 @@ var
   params: string;
   i: integer;
 begin
-  add_include_path(s,{$ifdef standalonetest}'/Users/ericheijnen/Documents/GitHub/cheat-engine/Cheat Engine/bin/cheatengine-x86_64.app/Contents/MacOS/'+{$endif}'include');
+  add_include_path(s,{$ifdef standalonetest}'/Users/ericheijnen/Documents/GitHub/cheat-engine/DataViewer/bin/cheatengine-x86_64.app/Contents/MacOS/'+{$endif}'include');
   {$ifdef windows}
-  add_include_path(s,{$ifdef standalonetest}'D:\git\cheat-engine\Cheat Engine\bin\'+{$endif}'include\winapi');
+  add_include_path(s,{$ifdef standalonetest}'D:\git\cheat-engine\DataViewer\bin\'+{$endif}'include\winapi');
   {$endif}
-  add_include_path(s,{$ifdef standalonetest}'/Users/ericheijnen/Documents/GitHub/cheat-engine/Cheat Engine/bin/cheatengine-x86_64.app/Contents/MacOS/'+{$endif}'include\sys');
+  add_include_path(s,{$ifdef standalonetest}'/Users/ericheijnen/Documents/GitHub/cheat-engine/DataViewer/bin/cheatengine-x86_64.app/Contents/MacOS/'+{$endif}'include\sys');
   add_include_path(s,pchar(ExtractFilePath(application.exename)+'include'));
   {$ifdef windows}
   add_include_path(s,pchar(ExtractFilePath(application.exename)+'include\winapi'));

@@ -1822,7 +1822,7 @@ begin
   for i:=0 to f.Count-1 do
   begin
     n:=f[i];
-    if not (fileexists(n+pathsep+'memorytoolkit.po') or fileexists(n+PathDelim+'memorytoolkit-x86_64.po') or fileexists(n+PathDelim+'memorytoolkit-i386.po')) then
+    if not (fileexists(n+pathsep+'dataviewer.po') or fileexists(n+PathDelim+'dataviewer-x86_64.po') or fileexists(n+PathDelim+'dataviewer-i386.po')) then
       continue;
 
 

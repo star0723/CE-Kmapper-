@@ -1,4 +1,4 @@
-// Copyright Cheat Engine. All Rights Reserved.
+// Copyright DataViewer. All Rights Reserved.
 
 
 unit CEFuncProc;
@@ -6,7 +6,7 @@ unit CEFuncProc;
 {$MODE Delphi}
 
 //This version of CEFuncProc has been COPIED to the server dir
-//Cheat Engine regular WONT look at this
+//DataViewer regular WONT look at this
 
 interface
 
@@ -2174,7 +2174,7 @@ begin
   renamefile(CheatEngineDir+'Memory.tmp',cheatenginedir+'Memory.UNDO');
   renamefile(CheatEngineDir+'Addresses.tmp',CheatEngineDir+'Addresses.UNDO');
   renamefile(CheatEngineDir+'Memory2.tmp',CheatEngineDir+'Memory.TMP');
-  Renamefile(CheatengineDir+'Address2.TMP',CheatEngineDir+'Addresses.TMP');
+  Renamefile(CheatEngineDir+'Address2.TMP',CheatEngineDir+'Addresses.TMP');
 
 
 end;
@@ -2263,7 +2263,7 @@ end;   }
 
 function GetUserNameFromPID(ProcessId: DWORD): string;
 //credits to Alice0725
-//http://forum.cheatengine.org/viewtopic.php?t=564382
+//http://forum.localhost/viewtopic.php?t=564382
 {$IFDEF windows}
 type
   PTOKEN_USER = ^TOKEN_USER;

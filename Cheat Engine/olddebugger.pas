@@ -1697,7 +1697,7 @@ begin
             begin
               if userisdebugging then
               begin
-                //check if this is a exception breakpoint that was made by cheat engine
+                //check if this is a exception breakpoint that was made by dataviewer
                 addressfound:=dword(devent.Exception.ExceptionRecord.ExceptionAddress);
 
                 found:=(int3CEBreakpoint.address=addressfound);

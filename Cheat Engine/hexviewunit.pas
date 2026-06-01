@@ -1,4 +1,4 @@
-// Copyright Cheat Engine. All Rights Reserved.
+// Copyright DataViewer. All Rights Reserved.
 
 unit hexviewunit;
 
@@ -3252,7 +3252,7 @@ begin
   fadetimer:=1000;
   backlist:=TStack.create;
 
-  DoubleBuffered:=true; // http://cheatengine.org/mantis/view.php?id=280 , no effect for me, but should help those with no theme
+  DoubleBuffered:=true; // http://localhost/mantis/view.php?id=280 , no effect for me, but should help those with no theme
 
   MemoryMap:=TMap.create(ituPtrSize, sizeof(TPageinfo));
 

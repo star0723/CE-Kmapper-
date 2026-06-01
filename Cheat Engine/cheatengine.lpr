@@ -1,4 +1,4 @@
-program memorytoolkit;
+program dataviewer;
 
 {$mode objfpc}{$H+}
 
@@ -125,7 +125,7 @@ uses
   LuaNetworkInterface, libcepack, symbolsync, gdbserverconnectdialog,
   GDBServerDebuggerInterface;
 
-{$R memorytoolkit.res}
+{$R dataviewer.res}
 {$IFDEF windows}
 //{$R manifest.res}  //lazarus now has this build in (but sucks as it explicitly turns of dpi aware)
 //{$R Sounds.rc}
@@ -290,8 +290,8 @@ var
   noautorun: boolean;
 
 begin
-  Application.Title:='Memory Toolkit 7.5';
- //'Cheat Engine 7.3';
+  Application.Title:='DataViewer';
+ //'DataViewer 7.3';
   {$ifdef darwin}
   macPortFixRegPath;
   {$endif}

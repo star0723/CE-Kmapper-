@@ -23,23 +23,23 @@ const
   ceversion=7.51;
   strVersionPart='7.5.1';
 {$ifdef altname}  //i'd use $MACRO ON but fpc bugs out
-  strCheatEngine='Runtime Modifier'; //if you change this, also change it in first.pas
-  strCheatTable='Code Table';   //because it contains code.... duh.....
-  strCheatTableLower='code table';
-  strCheat='Modification';
-  strTrainer='Modifier';
-  strTrainerLower='modifier';
-  strMyCheatTables='My Mod Tables';
-  strSpeedHack='Speedmodifier';
+  strCheatEngine='DataViewer'; //if you change this, also change it in first.pas
+  strCheatTable='Data Table';
+  strCheatTableLower='data table';
+  strCheat='Data';
+  strTrainer='Viewer';
+  strTrainerLower='viewer';
+  strMyCheatTables='My Data Tables';
+  strSpeedHack='TimeScale';
 {$else}
-  strCheatEngine='Memory Toolkit';
-  strCheatTable='Memory Table';
-  strCheatTableLower='memory table';
-  strCheat='Memory';
-  strTrainer='Trainer';
-  strTrainerLower='trainer';
-  strMyCheatTables='My Memory Tables';
-  strSpeedHack='Speedhack';
+  strCheatEngine='DataViewer';
+  strCheatTable='Data Table';
+  strCheatTableLower='data table';
+  strCheat='Data';
+  strTrainer='Viewer';
+  strTrainerLower='viewer';
+  strMyCheatTables='My Data Tables';
+  strSpeedHack='TimeScale';
 {$endif}
 
 resourcestring

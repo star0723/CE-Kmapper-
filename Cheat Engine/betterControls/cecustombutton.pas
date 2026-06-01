@@ -1,4 +1,4 @@
-//Copyright Cheat Engine. All rights reserved
+//Copyright DataViewer. All rights reserved
 unit CECustomButton;  //more customizable button (not theme friendly)
 
 {$mode objfpc}{$H+}

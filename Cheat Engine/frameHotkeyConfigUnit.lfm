@@ -36,7 +36,7 @@ object frameHotkeyConfig: TframeHotkeyConfig
       ExtendedSelect = False
       Items.Strings = (
         'Attach to current foreground process'
-        'Popup/Hide cheat engine'
+        'Popup/Hide dataviewer'
         'Pause the selected process'
         'Toggle the speedhack'
         'Speedhack speed 1'
@@ -310,7 +310,7 @@ object frameHotkeyConfig: TframeHotkeyConfig
       Top = 50
       Width = 251
       BorderSpacing.Left = 2
-      Caption = 'Center Cheat Engine when bringing to front'
+      Caption = 'Center DataViewer when bringing to front'
       Checked = True
       State = cbChecked
       TabOrder = 2
@@ -325,7 +325,7 @@ object frameHotkeyConfig: TframeHotkeyConfig
       Width = 392
       BorderSpacing.Left = 2
       BorderSpacing.Top = 2
-      Caption = 'Hide some/all windows instead of trying to bring cheat engine to front'
+      Caption = 'Hide some/all windows instead of trying to bring dataviewer to front'
       Checked = True
       State = cbChecked
       TabOrder = 3

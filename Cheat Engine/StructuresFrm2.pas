@@ -722,7 +722,7 @@ resourcestring
    rsStructureDefine = 'Structure define';
    rsStructAlreadyExists = 'This is detected as structure named %s which already exists. Define a new version of this structure? (Click no to go to the existing one)';
    rsGiveTheNameForThisStructure = 'Give the name for this structure';
-   rsDoYouWantCheatEngineToTryAndFillInTheMostBasicType = 'Do you want Cheat '
+   rsDoYouWantCheatEngineToTryAndFillInTheMostBasicType = 'Do you want DataViewer to'
      +'Engine to try and fill in the most basic types of the struct using the '
      +'current address?';
    rsPleaseGiveAStartingSizeOfTheStructYouCanChangeThis = 'Please give a '

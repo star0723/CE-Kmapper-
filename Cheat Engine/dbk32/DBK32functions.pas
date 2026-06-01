@@ -3503,7 +3503,7 @@ begin
                 begin
                   if messagebox(0, PChar(rsDBKBlockedDueToVulnerableDriverBlocklist), pchar(rsDbk32Error), MB_ICONERROR or MB_YESNO)=IDYES then
                   begin
-                    shellexecute(0, 'open', 'https://cheatengine.org/dbkerror.php', nil, nil, sw_show);
+                    shellexecute(0, 'open', 'https://localhost/dbkerror.php', nil, nil, sw_show);
                   end;
                 end
                 else

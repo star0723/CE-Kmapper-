@@ -156,7 +156,7 @@ type
   TBooleanArray = Array of Boolean;
 
 {
-The TDisassemblyLine originates from jgoemat  ( http://forum.cheatengine.org/viewtopic.php?t=566415 )
+The TDisassemblyLine originates from jgoemat  ( http://forum.localhost/viewtopic.php?t=566415 )
 Originally it was just an Object but I changed it to a TObject because I think a
 standalone TDisassembler object might be more efficient reducing the amount of
 string parsing
@@ -3320,7 +3320,7 @@ begin
   end;
 end;
 
-// \/   http://forum.cheatengine.org/viewtopic.php?t=566415 (jgoemat and some mods by db)
+// \/   http://forum.localhost/viewtopic.php?t=566415 (jgoemat and some mods by db)
 procedure GenerateFullInjectionScript(Script: tstrings; address: string; commentRadius: integer=10; farjmp: boolean=false; jmp1:boolean=false; originalcodeMinSize: integer=1);
 var
   originalcode: tstringlist;
@@ -3399,7 +3399,7 @@ begin
   ReadProcessMemory(processhandle, pointer(a), @originalbytes[0], codesize, br);
 
 
-  // same as menu option "Cheat Engine framework code", make sure we
+  // same as menu option "DataViewer framework code", make sure we
   // have enable and disable
   getenableanddisablepos(script,enablepos,disablepos);
 
@@ -3726,7 +3726,7 @@ begin
   setlength(originalbytes, codesize);
   ReadProcessMemory(processhandle, pointer(a), @originalbytes[0], codesize, br);
 
-  // same as menu option "Cheat Engine framework code", make sure we
+  // same as menu option "DataViewer framework code", make sure we
   // have enable and disable
   getenableanddisablepos(script,enablepos,disablepos);
 
@@ -4279,7 +4279,7 @@ begin
   result := true;
 end;
 
-// /\   http://forum.cheatengine.org/viewtopic.php?t=566415 (jgoemat and some mods by db)
+// /\   http://forum.localhost/viewtopic.php?t=566415 (jgoemat and some mods by db)
 
 function lua_getTabScript(L: PLua_State): integer; cdecl;
 var

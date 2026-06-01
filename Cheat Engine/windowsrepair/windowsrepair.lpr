@@ -41,35 +41,35 @@ var
   reg: TRegistry;
 
 begin
-  deleteKey('\Software\Wow6432Node\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\Memory Toolkit.exe');
-  deleteKey('\Software\Wow6432Node\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\memorytoolkit-i386.exe');
-  deleteKey('\Software\Wow6432Node\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\memorytoolkit-x86_64.exe');
+  deleteKey('\Software\Wow6432Node\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\DataViewer.exe');
+  deleteKey('\Software\Wow6432Node\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\dataviewer-i386.exe');
+  deleteKey('\Software\Wow6432Node\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\dataviewer-x86_64.exe');
 
-  deleteKey('\Software\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\Memory Toolkit.exe');
-  deleteKey('\Software\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\memorytoolkit-i386.exe');
-  deleteKey('\Software\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\memorytoolkit-x86_64.exe');
+  deleteKey('\Software\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\DataViewer.exe');
+  deleteKey('\Software\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\dataviewer-i386.exe');
+  deleteKey('\Software\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\dataviewer-x86_64.exe');
 
   reg:=Tregistry.Create;
   try
     reg.RootKey := HKEY_LOCAL_MACHINE;
     if reg.OpenKey('\Software\Wow6432Node\Microsoft\Windows NT\CurrentVersion\Image File Execution Options',false) then
     begin
-      reg.deletekey('Memory Toolkit.exe');
-      reg.deletekey('memorytoolkit-i386.exe');
-      reg.deletekey('memorytoolkit-x86_64.exe');
+      reg.deletekey('DataViewer.exe');
+      reg.deletekey('dataviewer-i386.exe');
+      reg.deletekey('dataviewer-x86_64.exe');
     end;
 
     if reg.OpenKey('\Software\Microsoft\Windows NT\CurrentVersion\Image File Execution Options',false) then
     begin
-      reg.deletekey('Memory Toolkit.exe');
-      reg.deletekey('memorytoolkit-i386.exe');
-      reg.deletekey('memorytoolkit-x86_64.exe');
+      reg.deletekey('DataViewer.exe');
+      reg.deletekey('dataviewer-i386.exe');
+      reg.deletekey('dataviewer-x86_64.exe');
     end;
   finally
     reg.free;
   end;
 
   if (ParamCount=0) or (ParamStr(1)<>'/s') then
-    messagebox(0,'Your windows install should be repaired. Try running Memory Toolkit now', 'Windows Repair (CE)',0);
+    messagebox(0,'Your windows install should be repaired. Try running DataViewer now', 'Windows Repair',0);
 end.
 

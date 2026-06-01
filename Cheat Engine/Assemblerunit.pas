@@ -1,4 +1,4 @@
-// Copyright Cheat Engine. All Rights Reserved.
+// Copyright DataViewer. All Rights Reserved.
 
 
 unit Assemblerunit;

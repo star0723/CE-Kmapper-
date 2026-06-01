@@ -4044,7 +4044,7 @@ begin
 end;
 
 procedure TMemoryBrowser.Savememoryregion1Click(Sender: TObject);
-{will save a cheat engine memory region file .CEM}
+{will save a dataviewer memory region file .CEM}
 begin
   if frmSaveMemoryRegion=nil then
     frmSaveMemoryRegion:=TFrmSaveMemoryRegion.create(self);

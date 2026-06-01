@@ -1,4 +1,4 @@
-program memorytoolkit;
+program dataviewer;
 
 {$mode DELPHI}
 
@@ -47,9 +47,9 @@ begin
   {$endif}
 
   {$ifndef altname}
-  basename:='memorytoolkit';
+  basename:='dataviewer';
   {$else}
-  basename:='rt-mod';
+  basename:='dataviewer';
   {$endif}
 
   WindowsKernel:=LoadLibrary('Kernel32.dll'); //there is no kernel33.dll
@@ -102,7 +102,7 @@ begin
   else
   begin
     s:=exename;
-    MessageBoxW(0, pwidechar(exename+' could not be found. Please disable/uninstall your anti virus and reinstall Memory Toolkit to fix this'),'Memory Toolkit launch error',MB_OK or MB_ICONERROR);
+    MessageBoxW(0, pwidechar(exename+' could not be found. Please reinstall the application to fix this'),'Launch error',MB_OK or MB_ICONERROR);
   end;
 
 
