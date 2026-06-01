@@ -133,6 +133,7 @@ function AsioScanNext(scanOp: uint8; valueLo, valueHi: QWord;
 
 // VQE cache: attach 时一次性加载, 后续纯本地查询
 function AsioPreloadRegionCache: boolean;
+procedure AsioInvalidateRegionCache;
 function AsioVqeLookup(address: QWord;
                        var allocBase, baseAddr, regionSize: QWord;
                        var state, protect, rtype, allocProtect: uint32): boolean;
@@ -220,6 +221,8 @@ var
   regionCache: TRegionArray = nil;
   regionCacheCount: integer = 0;
   regionCacheValid: boolean = false;
+  regionCacheTime: uint64 = 0;  // GetTickCount64 when cache was last loaded
+  REGION_CACHE_TTL: uint64 = 30000; // auto-refresh after 30 seconds
 
 procedure EnsurePipeCS;
 begin
@@ -396,7 +399,7 @@ end;
 
 function AsioConnect(const pipeName: string): boolean;
 var
-  pn, hintName: string;
+  hintName: string;
 begin
   result := false;
   AsioDisconnect;
@@ -525,6 +528,7 @@ begin
   begin
     va := resp;
     result := true;
+    AsioInvalidateRegionCache; // memory layout changed
   end
   else
     lastError := 'Alloc: ' + IntToStr(status);
@@ -538,6 +542,8 @@ var
 begin
   result := SendRecv(ASIO_OP_FREE, va, sizeof(va),
                      dummy, 0, respSize, status) and (status = ASIO_OK);
+  if result then
+    AsioInvalidateRegionCache; // memory layout changed
 end;
 
 function AsioEnumModules(var moduleData: TBytes): boolean;
@@ -614,7 +620,15 @@ begin
     Move(respBuf[sizeof(header)], regionCache[0],
          regionCacheCount * sizeof(TAsioR0RegionEntry));
   regionCacheValid := true;
+  regionCacheTime := GetTickCount64;
   result := true;
+end;
+
+procedure AsioInvalidateRegionCache;
+begin
+  regionCacheValid := false;
+  regionCacheCount := 0;
+  regionCache := nil;
 end;
 
 // Binary search: find region whose base <= address < base+region_size
@@ -626,9 +640,9 @@ var
   e: TAsioR0RegionEntry;
 begin
   result := false;
-  if not regionCacheValid then
+  if (not regionCacheValid) or
+     (GetTickCount64 - regionCacheTime > REGION_CACHE_TTL) then
   begin
-    // First call: try to load cache
     if not AsioPreloadRegionCache then exit;
   end;
 
