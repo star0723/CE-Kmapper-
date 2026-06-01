@@ -18,6 +18,7 @@ uses
   macport, macportdefines,coresymbolication, macexceptiondebuggerinterface,
   macCreateRemoteThread, macumm, machotkeys, macPipe,
   {$endif}
+  {$ifdef windows}windows,{$endif}
   betterControls, controls, sysutils, Forms, LazUTF8, dialogs, SynCompletion,
   MainUnit, CEDebugger, NewKernelHandler, CEFuncProc, ProcessHandlerUnit,
   symbolhandler, Assemblerunit, hypermode, byteinterpreter, addressparser,
@@ -289,12 +290,39 @@ var
   path: string;
   noautorun: boolean;
 
+{$ifdef windows}
+procedure ApplyProcessProtection;
+type
+  TSetMitigationFn = function(Policy: integer; lpBuffer: pointer; dwLen: Cardinal): LongBool; stdcall;
+var
+  hKernel: THandle;
+  SetMitigation: TSetMitigationFn;
+  policy: Cardinal;
+begin
+  hKernel := windows.GetModuleHandle('kernel32.dll');
+  if hKernel = 0 then exit;
+  SetMitigation := TSetMitigationFn(windows.GetProcAddress(hKernel, 'SetProcessMitigationPolicy'));
+  if not Assigned(SetMitigation) then exit;
+  // Block unsigned DLL injection (ProcessSignaturePolicy = 8)
+  policy := 1; // MicrosoftSignedOnly
+  SetMitigation(8, @policy, sizeof(policy));
+  // Block dynamic code creation from remote threads (ProcessDynamicCodePolicy = 2)
+  policy := 1; // ProhibitDynamicCode
+  SetMitigation(2, @policy, sizeof(policy));
+end;
+{$endif}
+
 begin
   Application.Title:='DataViewer';
  //'DataViewer 7.3';
   {$ifdef darwin}
   macPortFixRegPath;
   {$endif}
+
+  {$ifdef windows}
+  ApplyProcessProtection;
+  {$endif}
+
   outputdebugstring('start');
 
   Application.Initialize;

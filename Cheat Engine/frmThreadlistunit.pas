@@ -12,7 +12,7 @@ uses
   {$endif}
   LCLIntf, Messages, SysUtils, Classes, Graphics, Controls, Forms,
   Dialogs, ComCtrls, Menus, StdCtrls, LResources,cefuncproc, CEDebugger, debugHelper,
-  newkernelhandler, networkInterface, NetworkDebuggerInterface, networkInterfaceApi, betterControls  {$ifdef darwin}
+  newkernelhandler, networkInterface, NetworkDebuggerInterface, networkInterfaceApi, AsioBridge, betterControls  {$ifdef darwin}
   ,macport, macportdefines
   {$endif}  ;
 
@@ -249,6 +249,7 @@ var
   n:TTreenode;
   expandedList: TList;
   expinfo: PExpandedInfo;
+  r0threads: TAsioThreadArray;
 begin
   expandedList:=TList.create;
   n:=threadtreeview.Items.GetFirstNode;
@@ -298,24 +299,38 @@ begin
   end
   else
   begin
-    //get the list using thread32first/next
-    ths:=CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD,processid);
-    //OutputDebugString('after CreateToolhelp32Snapshot ths='+inttohex(ths,8));
-
-    if ths<>INVALID_HANDLE_VALUE then
+    // R0 path: enumerate threads via kernel pipe (bypasses CreateToolhelp32Snapshot)
+    if AsioReady then
     begin
-      zeromemory(@te32,sizeof(te32));
-      te32.dwSize:=sizeof(te32);
-      if Thread32First(ths, te32) then
-      repeat
-        if te32.th32OwnerProcessID=processid then
+      if AsioEnumThreads(r0threads) then
+      begin
+        for j := 0 to High(r0threads) do
         begin
-          n:=threadTreeview.Items.add(nil,inttohex(te32.th32ThreadID,1));
-          n.data:=pointer(te32.th32ThreadID);
+          n := threadTreeview.Items.add(nil, inttohex(r0threads[j].tid, 1));
+          n.data := pointer(PtrUInt(r0threads[j].tid));
         end;
+      end;
+    end
+    else
+    begin
+      //get the list using thread32first/next
+      ths:=CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD,processid);
 
-      until Thread32Next(ths, te32)=false;
-      closehandle(ths);
+      if ths<>INVALID_HANDLE_VALUE then
+      begin
+        zeromemory(@te32,sizeof(te32));
+        te32.dwSize:=sizeof(te32);
+        if Thread32First(ths, te32) then
+        repeat
+          if te32.th32OwnerProcessID=processid then
+          begin
+            n:=threadTreeview.Items.add(nil,inttohex(te32.th32ThreadID,1));
+            n.data:=pointer(te32.th32ThreadID);
+          end;
+
+        until Thread32Next(ths, te32)=false;
+        closehandle(ths);
+      end;
     end;
   end;
 

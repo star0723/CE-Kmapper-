@@ -30,6 +30,8 @@ const
   ASIO_OP_QUERY_REGION = $0E;
   ASIO_OP_ENUM_REGIONS = $0F;
   ASIO_OP_ENUM_PROCS   = $10;
+  ASIO_OP_ENUM_THREADS = $11;
+  ASIO_OP_FREE_MEM     = $12;
   ASIO_OP_SHUTDOWN     = $FF;
 
   ASIO_OK              = 0;
@@ -107,6 +109,14 @@ type
 
   TAsioProcArray = array of TAsioProcEntry;
 
+  TAsioThreadEntry = packed record
+    tid: uint32;
+    reserved: uint32;
+    startAddress: uint64;
+    teb: uint64;
+  end;
+  TAsioThreadArray = array of TAsioThreadEntry;
+
 var
   AsioReady: boolean = false;
 
@@ -119,8 +129,10 @@ function AsioRead(va: QWord; buf: pointer; size: QWord): boolean;
 function AsioWrite(va: QWord; buf: pointer; size: QWord): boolean;
 function AsioAlloc(size: QWord; protect: uint32; var va: QWord): boolean;
 function AsioFree(va: QWord): boolean;
+function AsioFreeMem(va: QWord; size: QWord): boolean;
 function AsioEnumModules(var moduleData: TBytes): boolean;
 function AsioEnumProcesses(var procs: TAsioProcArray): boolean;
+function AsioEnumThreads(var threads: TAsioThreadArray): boolean;
 
 function AsioScanAob(rangeStart, rangeEnd: QWord; alignment: uint32;
                      const pattern: SysUtils.TBytes; const mask: SysUtils.TBytes;
@@ -377,21 +389,53 @@ begin
   end;
 end;
 
-function DiscoverPipeName: string;
+function DeriveHintFilePath: string;
 var
   tmpDir: array[0..MAX_PATH-1] of char;
+  hk: HKEY;
+  machineGuid: array[0..63] of AnsiChar;
+  sz: DWORD;
+  hash: uint32;
+  i: integer;
+begin
+  GetTempPath(MAX_PATH, @tmpDir[0]);
+  // Read MachineGuid from registry (same as server)
+  FillChar(machineGuid, SizeOf(machineGuid), 0);
+  StrCopy(machineGuid, 'default');
+  sz := SizeOf(machineGuid);
+  if RegOpenKeyEx(HKEY_LOCAL_MACHINE, 'SOFTWARE\Microsoft\Cryptography', 0,
+                  KEY_READ or KEY_WOW64_64KEY, hk) = 0 then
+  begin
+    RegQueryValueEx(hk, 'MachineGuid', nil, nil, @machineGuid[0], @sz);
+    RegCloseKey(hk);
+  end;
+  // FNV-1a hash
+  hash := $811c9dc5;
+  i := 0;
+  while machineGuid[i] <> #0 do
+  begin
+    hash := hash xor Byte(machineGuid[i]);
+    hash := hash * $01000193;
+    inc(i);
+  end;
+  result := IncludeTrailingPathDelimiter(string(tmpDir)) + IntToHex(hash, 8) + '.tmp';
+end;
+
+function DiscoverPipeName: string;
+var
   hintPath: string;
   sl: TStringList;
 begin
   result := '';
-  GetTempPath(MAX_PATH, @tmpDir[0]);
-  hintPath := IncludeTrailingPathDelimiter(string(tmpDir)) + 'asio_pipe_name.txt';
+  hintPath := DeriveHintFilePath;
   if not FileExists(hintPath) then exit;
   sl := TStringList.Create;
   try
     sl.LoadFromFile(hintPath);
     if sl.Count > 0 then
       result := Trim(sl[0]);
+    // Delete hint file after reading (reduce forensic trace)
+    DeleteFile(hintPath);
   finally
     sl.Free;
   end;
@@ -587,6 +631,55 @@ begin
   if count > 0 then
     Move(respBuf[sizeof(header)], procs[0], count * sizeof(TAsioProcEntry));
   result := true;
+end;
+
+function AsioEnumThreads(var threads: TAsioThreadArray): boolean;
+var
+  respBuf: TBytes;
+  respSize: uint64;
+  status: int32;
+  count: integer;
+  header: TRegionListResp; // reuse: count + reserved
+begin
+  result := false;
+  if not AsioIsConnected then exit;
+
+  SetLength(respBuf, 512 * 1024);
+  if not SendRecvNoPayload(ASIO_OP_ENUM_THREADS, respBuf[0],
+                           length(respBuf), respSize, status) then exit;
+  if (status <> ASIO_OK) or (respSize < 8) then
+  begin
+    lastError := 'EnumThreads: ' + IntToStr(status);
+    exit;
+  end;
+
+  Move(respBuf[0], header, sizeof(header));
+  count := header.count;
+  if count > integer((respSize - 8) div sizeof(TAsioThreadEntry)) then
+    count := integer((respSize - 8) div sizeof(TAsioThreadEntry));
+  SetLength(threads, count);
+  if count > 0 then
+    Move(respBuf[8], threads[0], count * sizeof(TAsioThreadEntry));
+  result := true;
+end;
+
+function AsioFreeMem(va: QWord; size: QWord): boolean;
+var
+  req: packed record
+    addr: uint64;
+    sz: uint64;
+  end;
+  respSize: uint64;
+  status: int32;
+begin
+  result := false;
+  if not AsioIsConnected then exit;
+  req.addr := va;
+  req.sz := size;
+  result := SendRecv(ASIO_OP_FREE_MEM, req, sizeof(req), nil^, 0, respSize, status);
+  if status <> ASIO_OK then
+    lastError := 'FreeMem: ' + IntToStr(status);
+  result := result and (status = ASIO_OK);
 end;
 
 // ---- VQE region cache ----
