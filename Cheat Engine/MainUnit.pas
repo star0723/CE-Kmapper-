@@ -5899,7 +5899,7 @@ begin
   callhelp := False;
   Result := True;
 
-  wikipath:='https://wiki.cheatengine.org/index.php';
+  wikipath:='https://wiki.localhost/index.php';
   wikiurl:='';
 
   if command = HELP_CONTEXT then
@@ -5910,13 +5910,13 @@ begin
       4:    wikiurl:='?title=Tutorials:AttachToProcess';
       11:   wikiurl:='?title=Help_File:Table_Extras';
       12:   wikiurl:='?title=Help_File:Memory_view';
-      19:   wikiurl:='?title=Cheat_Engine:Lua';
-      1089: wikiurl:='?title=Cheat_Engine:Auto_Assembler';
+      19:   wikiurl:='?title=DataViewer:Lua';
+      1089: wikiurl:='?title=DataViewer:Auto_Assembler';
     end;
 
     {$ifdef windows}
     if wikiurl='' then //no wikilink given
-      HtmlHelpA(Win32WidgetSet.AppHandle, PChar(cheatenginedir + 'memorytoolkit.chm'), HH_HELP_CONTEXT, Data)
+      HtmlHelpA(Win32WidgetSet.AppHandle, PChar(cheatenginedir + 'dataviewer.chm'), HH_HELP_CONTEXT, Data)
     else
     {$endif}
       ShellExecute(0,'open',pchar(wikipath+wikiurl),nil,nil,SW_SHOW);
@@ -7297,7 +7297,7 @@ end;
 procedure TMainForm.LogoClick(Sender: TObject);
 var s: string;
 begin
-  s:=format('http://www.cheatengine.org/?referredby=CE%.2f',[ceversion]);
+  s:=format('http://www.localhost/?referredby=CE%.2f',[ceversion]);
   if messagedlg(rsDoYouWantToGoToTheCheatEngineWebsite, mtConfirmation,
     [mbYes, mbNo], 0) = mrYes then
     ShellExecute(0, PChar('open'), PChar(s),
@@ -8511,7 +8511,6 @@ begin
   begin
     reg.WriteBool('First Time User', False);
 
-
     if formsettings.lbLanguages.Count>1 then
     begin
       i:=ShowSelectionList(self, rsLanguage, rsChooseLanguage, formSettings.lbLanguages.Items, s);
@@ -8522,17 +8521,7 @@ begin
       end;
     end;
 
-
-    if messagedlg(rsTryTutorial, mtConfirmation, [mbYes, mbNo], 0) = mrYes then
-    {$ifdef darwin}
-      miTutorial64.click;
-    {$else}
-      {$ifdef cpu32}
-      miTutorial.Click;
-      {$else}
-      miTutorial64.Click;
-      {$endif}
-    {$endif}
+    // Tutorial dialog removed — skip first-time tutorial prompt
   end;
 
   if reg.ValueExists('Show previous value column') then
@@ -8629,6 +8618,7 @@ begin
 
   //SMenu:=GetSystemMenu(handle,false);
   cleanrun:=autosize;
+  try
   autosize:=false;
 
 
@@ -8964,6 +8954,11 @@ begin
     caption:=caption+' (Admin)';
 
   askAboutRunningAsAdmin:=true;
+
+  except
+    on E: EAccessViolation do
+      OutputDebugString('FormShow: suppressed layout AV (non-fatal): ' + E.Message);
+  end;
 
 end;
 
@@ -11137,7 +11132,7 @@ end;
 
 procedure TMainForm.Helpindex1Click(Sender: TObject);
 begin
-  ShellExecute(0,'open','https://wiki.cheatengine.org/index.php',nil,nil,SW_SHOW);
+  ShellExecute(0,'open','https://wiki.localhost/index.php',nil,nil,SW_SHOW);
 //  Application.HelpContext(1);
 end;
 

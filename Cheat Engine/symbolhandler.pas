@@ -519,7 +519,7 @@ uses Assemblerunit, DriverList, LuaHandler, lualib, lua, lauxlib,
   ProcessHandlerUnit, Globals, Parsers, MemoryQuery, LuaCaller,
   UnexpectedExceptionsHelper, frmSymbolEventTakingLongUnit, MainUnit, addresslist,
   MemoryRecordUnit, mainunit2, BetterDLLSearchPath, DebuggerInterfaceAPIWrapper,
-  GDBServerDebuggerInterface;
+  GDBServerDebuggerInterface, AsioBridge;
 {$endif}
 
 
@@ -5969,13 +5969,14 @@ begin
 end;
 
 function TSymhandler.loadmodulelistInternal: boolean;
+label skipToolhelp;
 var
   ths: thandle;
   me32:MODULEENTRY32;
   s: string;
   x: string;
 
-  i: integer;
+  i, j: integer;
 
   processid: dword;
   modulename: string;
@@ -5991,6 +5992,13 @@ var
   newmodulelistpos: integer;
   sectionlist: TStringlist;
   si: TSectionInfo;
+
+  rawModData: SysUtils.TBytes;
+  r0modCount: uint32;
+  r0modOffset: integer;
+  r0mBase: uint64;
+  r0mSize: uint64;
+  r0mNameLen: uint32;
 begin
 
   result:=false;
@@ -6017,6 +6025,87 @@ begin
 
     modulelistMREW.Endread;  }
 
+
+    // R0 path: enumerate modules via kernel PEB walk (bypasses CreateToolhelp32Snapshot hooks)
+    ths := 0;
+    if AsioReady and (not targetself) then
+    begin
+      if AsioEnumModules(rawModData) and (length(rawModData) >= 8) then
+      begin
+        r0modCount := 0;
+        Move(rawModData[0], r0modCount, 4);
+        r0modOffset := 8;
+        modulelistMREW.BeginRead;
+        try
+          newmodulelistpos := 0;
+          setlength(newmodulelist, length(modulelist));
+
+          for i := 0 to integer(r0modCount) - 1 do
+          begin
+            if r0modOffset + 24 > length(rawModData) then break;
+            r0mBase := 0;
+            r0mSize := 0;
+            r0mNameLen := 0;
+            Move(rawModData[r0modOffset], r0mBase, 8);
+            Move(rawModData[r0modOffset + 8], r0mSize, 8);
+            Move(rawModData[r0modOffset + 16], r0mNameLen, 4);
+            inc(r0modOffset, 24);
+            if (r0mNameLen > 0) and (r0modOffset + integer(r0mNameLen) <= length(rawModData)) then
+            begin
+              SetLength(modulename, r0mNameLen);
+              Move(rawModData[r0modOffset], modulename[1], r0mNameLen);
+              inc(r0modOffset, r0mNameLen);
+            end
+            else
+            begin
+              modulename := format('mod_0x%x', [r0mBase]);
+              inc(r0modOffset, r0mNameLen);
+            end;
+
+            x := modulename;
+            if (length(modulename) > 0) and (modulename[1] <> '[') then
+              modulename := extractfilename(modulename);
+
+            alreadyInTheList := false;
+            for j := 0 to newmodulelistpos - 1 do
+            begin
+              if newmodulelist[j].baseaddress = ptrUint(r0mBase) then
+              begin
+                alreadyInTheList := true;
+                break;
+              end;
+            end;
+
+            if not alreadyInTheList then
+            begin
+              if newmodulelistpos + 1 >= length(newmodulelist) then
+                setlength(newmodulelist, length(newmodulelist) * 2);
+
+              newmodulelist[newmodulelistpos].modulename := modulename;
+              newmodulelist[newmodulelistpos].modulepath := x;
+              newmodulelist[newmodulelistpos].isSystemModule :=
+                (pos(lowercase(windowsdir), lowercase(x)) > 0) and (ExtractFileExt(lowercase(x)) <> '.exe');
+              newmodulelist[newmodulelistpos].baseaddress := ptrUint(r0mBase);
+              newmodulelist[newmodulelistpos].basesize := dword(r0mSize);
+              newmodulelist[newmodulelistpos].is64bitmodule := processhandler.is64Bit;
+
+              if (not newmodulelist[newmodulelistpos].isSystemModule) and (commonModuleList <> nil) then
+                newmodulelist[newmodulelistpos].isSystemModule :=
+                  commonModuleList.IndexOf(lowercase(newmodulelist[newmodulelistpos].modulename)) <> -1;
+
+              inc(newmodulelistpos);
+              if (modulelistpos = 0) or (newmodulelistpos > modulelistpos) or
+                 (modulelist[newmodulelistpos-1].baseaddress <> newmodulelist[newmodulelistpos-1].baseaddress) then
+                result := true;
+            end;
+          end;
+        finally
+          modulelistMREW.EndRead;
+        end;
+
+        goto skipToolhelp;
+      end;
+    end;
 
     //Note: Just TH32CS_SNAPMODULE32 will result in an empty list
     //Just TH32CS_SNAPMODULE only returns the 64-bit modules
@@ -6167,6 +6256,8 @@ begin
     finally
       modulelistmrew.EndRead;
     end;
+
+    skipToolhelp:
 
     if newmodulelistpos<>modulelistpos then
       result:=true;

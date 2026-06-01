@@ -1,4 +1,4 @@
-// Copyright Cheat Engine. All Rights Reserved.
+// Copyright DataViewer. All Rights Reserved.
 
 
 unit CEFuncProc;
@@ -6,7 +6,7 @@ unit CEFuncProc;
 {$MODE Delphi}
 
 //This version of CEFuncProc has been COPIED to the server dir
-//Cheat Engine regular WONT look at this
+//DataViewer regular WONT look at this
 
 interface
 
@@ -364,7 +364,8 @@ uses disassembler,CEDebugger,debughelper, symbolhandler, symbolhandlerstructs,
      savedscanhandler, networkInterface, networkInterfaceApi, vartypestrings,
      processlist, Parsers, Globals, xinput, luahandler, LuaClass, LuaObject,
      UnexpectedExceptionsHelper, LazFileUtils, autoassembler, Clipbrd, mainunit2,
-     cpuidUnit, OpenSave, GDBServerDebuggerInterface, DebuggerInterfaceAPIWrapper;
+     cpuidUnit, OpenSave, GDBServerDebuggerInterface, DebuggerInterfaceAPIWrapper,
+     AsioBridge;
 
 
 resourcestring
@@ -2173,7 +2174,7 @@ begin
   renamefile(CheatEngineDir+'Memory.tmp',cheatenginedir+'Memory.UNDO');
   renamefile(CheatEngineDir+'Addresses.tmp',CheatEngineDir+'Addresses.UNDO');
   renamefile(CheatEngineDir+'Memory2.tmp',CheatEngineDir+'Memory.TMP');
-  Renamefile(CheatengineDir+'Address2.TMP',CheatEngineDir+'Addresses.TMP');
+  Renamefile(CheatEngineDir+'Address2.TMP',CheatEngineDir+'Addresses.TMP');
 
 
 end;
@@ -2262,7 +2263,7 @@ end;   }
 
 function GetUserNameFromPID(ProcessId: DWORD): string;
 //credits to Alice0725
-//http://forum.cheatengine.org/viewtopic.php?t=564382
+//http://forum.localhost/viewtopic.php?t=564382
 {$IFDEF windows}
 type
   PTOKEN_USER = ^TOKEN_USER;
@@ -2333,9 +2334,51 @@ var ths: thandle;
     moduledata: tmoduledata;
     i: integer;
     alreadyInTheList: boolean;
+    rawData: SysUtils.TBytes;
+    modCount: uint32;
+    offset: integer;
+    modBase, modSize: uint64;
+    nameLen: uint32;
+    modName: string;
 begin
   cleanModuleList(modulelist);
 
+  // R0 path: enumerate via PEB walk through asio pipe (bypasses Toolhelp hooks)
+  if AsioReady and AsioEnumModules(rawData) and (length(rawData) >= 8) then
+  begin
+    Move(rawData[0], modCount, 4);
+    offset := 8; // skip header (count + reserved)
+    for i := 0 to integer(modCount) - 1 do
+    begin
+      if offset + 24 > length(rawData) then break; // 8+8+4+4 = 24 bytes per entry header
+      Move(rawData[offset], modBase, 8);
+      Move(rawData[offset + 8], modSize, 8);
+      Move(rawData[offset + 16], nameLen, 4);
+      inc(offset, 24); // skip entry header (base+size+name_len+reserved)
+      if (nameLen > 0) and (offset + integer(nameLen) <= length(rawData)) then
+      begin
+        SetLength(modName, nameLen);
+        Move(rawData[offset], modName[1], nameLen);
+        inc(offset, nameLen);
+      end
+      else
+      begin
+        modName := format('module_0x%x', [modBase]);
+        inc(offset, nameLen);
+      end;
+
+      if (withSystemModules) or (not symhandler.inSystemModule(ptrUint(modBase))) then
+      begin
+        moduledata := tmoduledata.Create;
+        moduledata.moduleaddress := dword(modBase);
+        moduledata.modulesize := dword(modSize);
+        ModuleList.AddObject(modName, moduledata);
+      end;
+    end;
+    exit;
+  end;
+
+  // Fallback: standard Toolhelp path
   ths:=CreateToolhelp32Snapshot(TH32CS_SNAPMODULE or TH32CS_SNAPMODULE32,processid);
   if ths<>0 then
   begin

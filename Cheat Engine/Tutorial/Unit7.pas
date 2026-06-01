@@ -61,7 +61,7 @@ resourcestring
     'a new window will open with detailed information on what happened when the instruction ran.'+#13#10+
     'If the assembler instruction doesn''t have anything between a ''['' and '']'' then use another item in the list.'+#13#10+
     'If it does it will say what it think will be the value of the pointer you need.'+#13#10+
-    'Go back to the main cheat engine window (you can keep this extra info window open if you want, but if you close it, '+
+    'Go back to the main dataviewer window (you can keep this extra info window open if you want, but if you close it, '+
     'remember what is between the ''['' and '']'' ) and do a 4 byte scan in hexadecimal for the value the extra info told you.'+#13#10+
     'When done scanning it may return 1 or a few hundred addresses. Most of the time the address you need will be the '+
     'smallest one. Now click on the "Add Address Manually" button and select the pointer checkbox.'+#13#10+
@@ -85,7 +85,7 @@ resourcestring
     ''+#13#10+
     ''+#13#10+
     'extra:'+#13#10+
-    'You could also use the pointer scanner to find the pointer to this address. https://cheatengine.org/help/pointer-scan.htm';
+    'You could also use the pointer scanner to find the pointer to this address. https://localhost/help/pointer-scan.htm';
   rsDontFuckingFreezeThePointer = 'I''m sorry, but freezing the pointer is not'
     +' really a functional solution';
 

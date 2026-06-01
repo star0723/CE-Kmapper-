@@ -14,7 +14,7 @@ implementation
 uses luahandler, LuaClass, LuaObject, LuaByteTable, mainunit2;
 
 type
-  TLuaSettings=class    //A wrapper for the registry object to make access to the cheat engine settings easier and uniform
+  TLuaSettings=class    //A wrapper for the registry object to make access to the dataviewer settings easier and uniform
   private
     freg: Tregistry;
     fpath: string;

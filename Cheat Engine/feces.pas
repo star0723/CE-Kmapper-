@@ -1,5 +1,5 @@
 unit feces;
-//friends endorsing cheat engine system
+//friends endorsing dataviewer system
 
 {$mode objfpc}{$H+}
 

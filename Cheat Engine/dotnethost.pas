@@ -1,4 +1,4 @@
-//Copyright Cheat Engine
+//Copyright DataViewer
 
 unit dotnethost;
 

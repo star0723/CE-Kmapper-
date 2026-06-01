@@ -30,6 +30,8 @@ const
   ASIO_OP_QUERY_REGION = $0E;
   ASIO_OP_ENUM_REGIONS = $0F;
   ASIO_OP_ENUM_PROCS   = $10;
+  ASIO_OP_ENUM_THREADS = $11;
+  ASIO_OP_FREE_MEM     = $12;
   ASIO_OP_SHUTDOWN     = $FF;
 
   ASIO_OK              = 0;
@@ -107,6 +109,14 @@ type
 
   TAsioProcArray = array of TAsioProcEntry;
 
+  TAsioThreadEntry = packed record
+    tid: uint32;
+    reserved: uint32;
+    startAddress: uint64;
+    teb: uint64;
+  end;
+  TAsioThreadArray = array of TAsioThreadEntry;
+
 var
   AsioReady: boolean = false;
 
@@ -119,8 +129,10 @@ function AsioRead(va: QWord; buf: pointer; size: QWord): boolean;
 function AsioWrite(va: QWord; buf: pointer; size: QWord): boolean;
 function AsioAlloc(size: QWord; protect: uint32; var va: QWord): boolean;
 function AsioFree(va: QWord): boolean;
+function AsioFreeMem(va: QWord; size: QWord): boolean;
 function AsioEnumModules(var moduleData: TBytes): boolean;
 function AsioEnumProcesses(var procs: TAsioProcArray): boolean;
+function AsioEnumThreads(var threads: TAsioThreadArray): boolean;
 
 function AsioScanAob(rangeStart, rangeEnd: QWord; alignment: uint32;
                      const pattern: SysUtils.TBytes; const mask: SysUtils.TBytes;
@@ -133,9 +145,15 @@ function AsioScanNext(scanOp: uint8; valueLo, valueHi: QWord;
 
 // VQE cache: attach 时一次性加载, 后续纯本地查询
 function AsioPreloadRegionCache: boolean;
+procedure AsioInvalidateRegionCache;
 function AsioVqeLookup(address: QWord;
-                       var baseAddr, regionSize: QWord;
+                       var allocBase, baseAddr, regionSize: QWord;
                        var state, protect, rtype, allocProtect: uint32): boolean;
+
+// Hardware breakpoint via R0 pipe (bypasses SetThreadContext on target)
+function AsioHwbpSet(tid: uint32; drIndex: uint8; va: QWord;
+                     condition: uint8; len: uint8): boolean;
+function AsioHwbpClear(tid: uint32; drIndex: uint8): boolean;
 
 function AsioGetLastError: string;
 
@@ -213,11 +231,37 @@ var
   hPipe: THandle = INVALID_HANDLE_VALUE;
   lastError: string = '';
   attachedPid: uint32 = 0;
+  pipeCS: TRTLCriticalSection;
+  pipeCsInit: boolean = false;
 
   // VQE region cache — sorted by base, binary searched
   regionCache: TRegionArray = nil;
   regionCacheCount: integer = 0;
   regionCacheValid: boolean = false;
+  regionCacheTime: uint64 = 0;  // GetTickCount64 when cache was last loaded
+  REGION_CACHE_TTL: uint64 = 30000; // auto-refresh after 30 seconds
+
+procedure EnsurePipeCS;
+begin
+  if not pipeCsInit then
+  begin
+    InitCriticalSection(pipeCS);
+    pipeCsInit := true;
+  end;
+end;
+
+procedure PipeDrain(h: THandle; remaining: uint64);
+var
+  buf: array[0..4095] of byte;
+  toRead, got: DWORD;
+begin
+  while remaining > 0 do
+  begin
+    if remaining > sizeof(buf) then toRead := sizeof(buf) else toRead := DWORD(remaining);
+    if not ReadFile(h, buf[0], toRead, got, nil) or (got = 0) then break;
+    dec(remaining, got);
+  end;
+end;
 
 function AsioGetLastError: string;
 begin
@@ -233,7 +277,7 @@ begin
   while size > 0 do
   begin
     if size > $10000 then toWrite := $10000 else toWrite := DWORD(size);
-    if not WriteFile(h, p^, toWrite, written, nil) or (written <> toWrite) then
+    if not WriteFile(h, p^, toWrite, written, nil) or (written = 0) then
     begin
       lastError := 'PipeWriteAll: ' + SysErrorMessage(GetLastError);
       exit(false);
@@ -278,36 +322,43 @@ begin
     exit;
   end;
 
-  hdr.magic := ASIO_R0_REQ_MAGIC;
-  hdr.version := ASIO_R0_PROTO_VERSION;
-  hdr.opcode := opcode;
-  hdr.reserved := 0;
-  hdr.payload_len := reqSize;
+  EnsurePipeCS;
+  EnterCriticalSection(pipeCS);
+  try
+    hdr.magic := ASIO_R0_REQ_MAGIC;
+    hdr.version := ASIO_R0_PROTO_VERSION;
+    hdr.opcode := opcode;
+    hdr.reserved := 0;
+    hdr.payload_len := reqSize;
 
-  if not PipeWriteAll(hPipe, hdr, sizeof(hdr)) then exit;
-  if (reqSize > 0) and not PipeWriteAll(hPipe, reqData, reqSize) then exit;
+    if not PipeWriteAll(hPipe, hdr, sizeof(hdr)) then exit;
+    if (reqSize > 0) and not PipeWriteAll(hPipe, reqData, reqSize) then exit;
 
-  if not PipeReadAll(hPipe, resp, sizeof(resp)) then exit;
-  if resp.magic <> ASIO_R0_RSP_MAGIC then
-  begin
-    lastError := 'Bad response magic';
-    exit;
-  end;
-
-  status := resp.status;
-  respSize := resp.payload_len;
-
-  if respSize > 0 then
-  begin
-    if respSize > respCapacity then
+    if not PipeReadAll(hPipe, resp, sizeof(resp)) then exit;
+    if resp.magic <> ASIO_R0_RSP_MAGIC then
     begin
-      lastError := 'Response too large';
+      lastError := 'Bad response magic';
       exit;
     end;
-    if not PipeReadAll(hPipe, respData, respSize) then exit;
-  end;
 
-  result := true;
+    status := resp.status;
+    respSize := resp.payload_len;
+
+    if respSize > 0 then
+    begin
+      if respSize > respCapacity then
+      begin
+        PipeDrain(hPipe, respSize);
+        lastError := 'Response too large';
+        exit;
+      end;
+      if not PipeReadAll(hPipe, respData, respSize) then exit;
+    end;
+
+    result := true;
+  finally
+    LeaveCriticalSection(pipeCS);
+  end;
 end;
 
 function SendRecvNoPayload(opcode: uint32; var respData; respCapacity: uint64;
@@ -319,25 +370,16 @@ begin
   result := SendRecv(opcode, dummy, 0, respData, respCapacity, respSize, status);
 end;
 
-function AsioConnect(const pipeName: string): boolean;
+function TryPipeConnect(const pn: string): boolean;
 var
-  pn: string;
   pingStatus: int32;
   pingRespSize: uint64;
   dummy: byte;
 begin
   result := false;
-  AsioDisconnect;
-
-  if pipeName = '' then pn := ASIO_R0_DEFAULT_PIPE else pn := pipeName;
-
   hPipe := CreateFile(PChar(pn), GENERIC_READ or GENERIC_WRITE,
                       0, nil, OPEN_EXISTING, 0, 0);
-  if hPipe = INVALID_HANDLE_VALUE then
-  begin
-    lastError := 'Connect: ' + SysErrorMessage(GetLastError);
-    exit;
-  end;
+  if hPipe = INVALID_HANDLE_VALUE then exit;
 
   if SendRecvNoPayload(ASIO_OP_PING, dummy, 0, pingRespSize, pingStatus) and
      (pingStatus = ASIO_OK) then
@@ -347,15 +389,105 @@ begin
   end
   else
   begin
-    lastError := 'Ping failed';
-    AsioDisconnect;
+    CloseHandle(hPipe);
+    hPipe := INVALID_HANDLE_VALUE;
   end;
 end;
 
+function DeriveHintFilePath: string;
+var
+  tmpDir: array[0..MAX_PATH-1] of char;
+  hk: HKEY;
+  machineGuid: array[0..63] of AnsiChar;
+  sz: DWORD;
+  hash: uint32;
+  i: integer;
+begin
+  GetTempPath(MAX_PATH, @tmpDir[0]);
+  // Read MachineGuid from registry (same as server)
+  FillChar(machineGuid, SizeOf(machineGuid), 0);
+  StrCopy(machineGuid, 'default');
+  sz := SizeOf(machineGuid);
+  if RegOpenKeyEx(HKEY_LOCAL_MACHINE, 'SOFTWARE\Microsoft\Cryptography', 0,
+                  KEY_READ or KEY_WOW64_64KEY, hk) = 0 then
+  begin
+    RegQueryValueEx(hk, 'MachineGuid', nil, nil, @machineGuid[0], @sz);
+    RegCloseKey(hk);
+  end;
+  // FNV-1a hash
+  hash := $811c9dc5;
+  i := 0;
+  while machineGuid[i] <> #0 do
+  begin
+    hash := hash xor Byte(machineGuid[i]);
+    hash := hash * $01000193;
+    inc(i);
+  end;
+  result := IncludeTrailingPathDelimiter(string(tmpDir)) + IntToHex(hash, 8) + '.tmp';
+end;
+
+function DiscoverPipeName: string;
+var
+  hintPath: string;
+  sl: TStringList;
+begin
+  result := '';
+  hintPath := DeriveHintFilePath;
+  if not FileExists(hintPath) then exit;
+  sl := TStringList.Create;
+  try
+    sl.LoadFromFile(hintPath);
+    if sl.Count > 0 then
+      result := Trim(sl[0]);
+    // Delete hint file after reading (reduce forensic trace)
+    DeleteFile(hintPath);
+  finally
+    sl.Free;
+  end;
+end;
+
+function AsioConnect(const pipeName: string): boolean;
+var
+  hintName: string;
+begin
+  result := false;
+  AsioDisconnect;
+
+  if pipeName <> '' then
+  begin
+    result := TryPipeConnect(pipeName);
+    if not result then
+      lastError := 'Connect: ' + SysErrorMessage(GetLastError);
+    exit;
+  end;
+
+  // 1. Try hint file (server writes actual pipe name with PID suffix)
+  hintName := DiscoverPipeName;
+  if hintName <> '' then
+  begin
+    result := TryPipeConnect(hintName);
+    if result then exit;
+  end;
+
+  // 2. Try default pipe name
+  result := TryPipeConnect(ASIO_R0_DEFAULT_PIPE);
+  if not result then
+    lastError := 'Connect: no pipe found (tried hint + default)';
+end;
+
 procedure AsioDisconnect;
+var
+  hdr: TAsioR0Header;
+  written: DWORD;
 begin
   if hPipe <> INVALID_HANDLE_VALUE then
   begin
+    hdr.magic := ASIO_R0_REQ_MAGIC;
+    hdr.version := ASIO_R0_PROTO_VERSION;
+    hdr.opcode := ASIO_OP_SHUTDOWN;
+    hdr.reserved := 0;
+    hdr.payload_len := 0;
+    WriteFile(hPipe, hdr, sizeof(hdr), written, nil);
     CloseHandle(hPipe);
     hPipe := INVALID_HANDLE_VALUE;
   end;
@@ -445,6 +577,7 @@ begin
   begin
     va := resp;
     result := true;
+    AsioInvalidateRegionCache; // memory layout changed
   end
   else
     lastError := 'Alloc: ' + IntToStr(status);
@@ -458,6 +591,8 @@ var
 begin
   result := SendRecv(ASIO_OP_FREE, va, sizeof(va),
                      dummy, 0, respSize, status) and (status = ASIO_OK);
+  if result then
+    AsioInvalidateRegionCache; // memory layout changed
 end;
 
 function AsioEnumModules(var moduleData: TBytes): boolean;
@@ -494,10 +629,62 @@ begin
 
   Move(respBuf[0], header, sizeof(header));
   count := header.count;
+  // Validate count against actual response size to prevent buffer overread
+  if count > integer((respSize - sizeof(header)) div sizeof(TAsioProcEntry)) then
+    count := integer((respSize - sizeof(header)) div sizeof(TAsioProcEntry));
   SetLength(procs, count);
   if count > 0 then
     Move(respBuf[sizeof(header)], procs[0], count * sizeof(TAsioProcEntry));
   result := true;
+end;
+
+function AsioEnumThreads(var threads: TAsioThreadArray): boolean;
+var
+  respBuf: TBytes;
+  respSize: uint64;
+  status: int32;
+  count: integer;
+  header: TRegionListResp; // reuse: count + reserved
+begin
+  result := false;
+  if not AsioIsConnected then exit;
+
+  SetLength(respBuf, 512 * 1024);
+  if not SendRecvNoPayload(ASIO_OP_ENUM_THREADS, respBuf[0],
+                           length(respBuf), respSize, status) then exit;
+  if (status <> ASIO_OK) or (respSize < 8) then
+  begin
+    lastError := 'EnumThreads: ' + IntToStr(status);
+    exit;
+  end;
+
+  Move(respBuf[0], header, sizeof(header));
+  count := header.count;
+  if count > integer((respSize - 8) div sizeof(TAsioThreadEntry)) then
+    count := integer((respSize - 8) div sizeof(TAsioThreadEntry));
+  SetLength(threads, count);
+  if count > 0 then
+    Move(respBuf[8], threads[0], count * sizeof(TAsioThreadEntry));
+  result := true;
+end;
+
+function AsioFreeMem(va: QWord; size: QWord): boolean;
+var
+  req: packed record
+    addr: uint64;
+    sz: uint64;
+  end;
+  respSize: uint64;
+  status: int32;
+begin
+  result := false;
+  if not AsioIsConnected then exit;
+  req.addr := va;
+  req.sz := size;
+  result := SendRecv(ASIO_OP_FREE_MEM, req, sizeof(req), nil^, 0, respSize, status);
+  if status <> ASIO_OK then
+    lastError := 'FreeMem: ' + IntToStr(status);
+  result := result and (status = ASIO_OK);
 end;
 
 // ---- VQE region cache ----
@@ -523,26 +710,37 @@ begin
 
   Move(respBuf[0], header, sizeof(header));
   regionCacheCount := header.count;
+  // Validate count against actual response size to prevent buffer overread
+  if regionCacheCount > integer((respSize - sizeof(header)) div sizeof(TAsioR0RegionEntry)) then
+    regionCacheCount := integer((respSize - sizeof(header)) div sizeof(TAsioR0RegionEntry));
   SetLength(regionCache, regionCacheCount);
   if regionCacheCount > 0 then
     Move(respBuf[sizeof(header)], regionCache[0],
          regionCacheCount * sizeof(TAsioR0RegionEntry));
   regionCacheValid := true;
+  regionCacheTime := GetTickCount64;
   result := true;
+end;
+
+procedure AsioInvalidateRegionCache;
+begin
+  regionCacheValid := false;
+  regionCacheCount := 0;
+  regionCache := nil;
 end;
 
 // Binary search: find region whose base <= address < base+region_size
 function AsioVqeLookup(address: QWord;
-                       var baseAddr, regionSize: QWord;
+                       var allocBase, baseAddr, regionSize: QWord;
                        var state, protect, rtype, allocProtect: uint32): boolean;
 var
   lo, hi, mid: integer;
   e: TAsioR0RegionEntry;
 begin
   result := false;
-  if not regionCacheValid then
+  if (not regionCacheValid) or
+     (GetTickCount64 - regionCacheTime > REGION_CACHE_TTL) then
   begin
-    // First call: try to load cache
     if not AsioPreloadRegionCache then exit;
   end;
 
@@ -559,6 +757,7 @@ begin
     else
     begin
       // Found
+      allocBase := e.allocation_base;
       baseAddr := e.base;
       regionSize := e.region_size;
       state := e.state;
@@ -569,6 +768,7 @@ begin
     end;
   end;
   // Not in any committed region → MEM_FREE
+  allocBase := address and $FFFFFFFFFFFFF000;
   baseAddr := address and $FFFFFFFFFFFFF000;
   regionSize := $1000;
   state := $10000; // MEM_FREE
@@ -692,6 +892,57 @@ begin
   if resp.hit_count > 0 then
     Move(respBuf[sizeof(resp)], hits[0], resp.hit_count * sizeof(uint64));
   result := true;
+end;
+
+function AsioHwbpSet(tid: uint32; drIndex: uint8; va: QWord;
+                     condition: uint8; len: uint8): boolean;
+var
+  req: packed record
+    r_tid: uint32;
+    r_dr_index: uint8;
+    r_condition: uint8;
+    r_length: uint8;
+    r_reserved: uint8;
+    r_va: uint64;
+  end;
+  respSize: uint64;
+  status: int32;
+begin
+  result := false;
+  if not AsioIsConnected then exit;
+  req.r_tid := tid;
+  req.r_dr_index := drIndex;
+  req.r_condition := condition;
+  req.r_length := len;
+  req.r_reserved := 0;
+  req.r_va := va;
+  result := SendRecv(ASIO_OP_HWBP_SET, req, sizeof(req), req, 0, respSize, status);
+  if status <> ASIO_OK then
+    lastError := 'HwbpSet: ' + IntToStr(status);
+  result := result and (status = ASIO_OK);
+end;
+
+function AsioHwbpClear(tid: uint32; drIndex: uint8): boolean;
+var
+  req: packed record
+    r_tid: uint32;
+    r_dr_index: uint8;
+    r_reserved: array[0..2] of uint8;
+  end;
+  respSize: uint64;
+  status: int32;
+begin
+  result := false;
+  if not AsioIsConnected then exit;
+  req.r_tid := tid;
+  req.r_dr_index := drIndex;
+  req.r_reserved[0] := 0;
+  req.r_reserved[1] := 0;
+  req.r_reserved[2] := 0;
+  result := SendRecv(ASIO_OP_HWBP_CLEAR, req, sizeof(req), req, 0, respSize, status);
+  if status <> ASIO_OK then
+    lastError := 'HwbpClear: ' + IntToStr(status);
+  result := result and (status = ASIO_OK);
 end;
 
 end.

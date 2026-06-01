@@ -129,16 +129,16 @@ begin
       end;
 
 
-      if filename='memorytoolkit-i386.exe' then
+      if filename='dataviewer-i386.exe' then
         filename:=ExtractFileName(GetModuleName(0)); //give it the same name as the trainer
 
-      if filename='memorytoolkit-x86_64.exe' then
+      if filename='dataviewer-x86_64.exe' then
         filename:=ExtractFileName(GetModuleName(0)); //give it the same name as the trainer
 
-      if filename='memorytoolkit-i386.exe.sig' then
+      if filename='dataviewer-i386.exe.sig' then
         filename:=ExtractFileName(GetModuleName(0))+'.sig';
 
-      if filename='memorytoolkit-x86_64.exe.sig' then
+      if filename='dataviewer-x86_64.exe.sig' then
         filename:=ExtractFileName(GetModuleName(0))+'.sig';
 
       filelist.add(launchdir+filename);

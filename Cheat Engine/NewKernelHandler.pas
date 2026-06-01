@@ -8,7 +8,7 @@ interface
 uses SysUtils, MacOSAll, MacOSXPosix, macport, macportdefines;
 {$else}
 uses jwawindows, windows,LCLIntf,sysutils, dialogs, classes, controls,
-     {$ifndef STANDALONECH}dbk32functions, vmxfunctions,debug, multicpuexecution,globals,{$endif} contnrs, Clipbrd;
+     {$ifndef STANDALONECH}dbk32functions, vmxfunctions,debug, multicpuexecution,globals, AsioBridge,{$endif} contnrs, Clipbrd;
 {$endif}
 
 const dbkdll='DBK32.dll';
@@ -1874,7 +1874,7 @@ begin
 
 
     DBK32Initialize;
-    DBKLoaded:=(dbk32functions.hdevice<>0) and (dbk32functions.hdevice<>INVALID_HANDLE_VALUE);
+    DBKLoaded:=AsioReady or ((dbk32functions.hdevice<>0) and (dbk32functions.hdevice<>INVALID_HANDLE_VALUE));
 
     //DarkByteKernel:= LoadLibrary(dbkdll);
 //    if DarkByteKernel=0 then exit; //raise exception.Create('Failed to open DBK32.dll');

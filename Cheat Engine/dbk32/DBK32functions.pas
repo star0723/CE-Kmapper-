@@ -481,6 +481,7 @@ end;
 function isDriverLoaded(SigningIsTheCause: PBOOL): BOOL; stdcall;
 begin
   result:=true;
+  if AsioReady then exit;  // AsioR0 pipe active — no kernel driver needed
   if hdevice=INVALID_HANDLE_VALUE then
   begin
     if SigningIsTheCause<>nil then
@@ -506,7 +507,7 @@ end;
 
 function GetLoadedState: BOOLEAN; stdcall;
 begin
-  result:=(hdevice<>INVALID_HANDLE_VALUE);
+  result:=AsioReady or (hdevice<>INVALID_HANDLE_VALUE);
 end;
 
 {$W+}
@@ -2219,7 +2220,7 @@ var
   l: THandleListEntry;
   validhandle: boolean;
 
-  ba, rs: QWord;
+  ab, ba, rs: QWord;
   st, pr, tp, ap: uint32;
 begin
   result:=0;
@@ -2227,16 +2228,44 @@ begin
   // asio path: pure cache lookup, zero IPC, zero syscall
   if AsioReady then
   begin
-    if AsioVqeLookup(ptrUint(address), ba, rs, st, pr, tp, ap) then
+    if AsioVqeLookup(ptrUint(address), ab, ba, rs, st, pr, tp, ap) then
     begin
       mbi.BaseAddress := pointer(ba);
-      mbi.AllocationBase := pointer(ba);
+      mbi.AllocationBase := pointer(ab);
       mbi.AllocationProtect := ap;
       mbi.RegionSize := rs;
       mbi.State := st;
       mbi.Protect := pr;
       mbi._Type := tp;
       result := sizeof(mbi);
+    end
+    else
+    begin
+      // Cache miss: refresh cache and retry (never fall through to R3)
+      AsioPreloadRegionCache;
+      if AsioVqeLookup(ptrUint(address), ab, ba, rs, st, pr, tp, ap) then
+      begin
+        mbi.BaseAddress := pointer(ba);
+        mbi.AllocationBase := pointer(ab);
+        mbi.AllocationProtect := ap;
+        mbi.RegionSize := rs;
+        mbi.State := st;
+        mbi.Protect := pr;
+        mbi._Type := tp;
+        result := sizeof(mbi);
+      end
+      else
+      begin
+        // Address not mapped: return MEM_FREE (no R3 fallback)
+        mbi.BaseAddress := pointer((ptrUint(address) div $1000) * $1000);
+        mbi.AllocationBase := nil;
+        mbi.AllocationProtect := 0;
+        mbi.RegionSize := $1000;
+        mbi.State := MEM_FREE;
+        mbi.Protect := PAGE_NOACCESS;
+        mbi._Type := 0;
+        result := sizeof(mbi);
+      end;
     end;
     exit;
   end;
@@ -3233,6 +3262,17 @@ var le: integer;
 begin
   outputdebugstring('DBK32Initialize');
 
+  // Try AsioR0 pipe connection first — if the server is running, skip driver loading entirely
+  if not AsioReady then
+  begin
+    if AsioConnect then
+      outputdebugstring('DBK32Initialize: AsioR0 pipe connected — using R0 backend')
+    else
+      outputdebugstring('DBK32Initialize: AsioR0 pipe not available, falling back to driver');
+  end;
+
+  if AsioReady then exit;  // R0 pipe is ready, no need for kernel driver
+
   if not requiresAdmin('DBK driver') then exit;
 
   try
@@ -3491,7 +3531,7 @@ begin
                 begin
                   if messagebox(0, PChar(rsDBKBlockedDueToVulnerableDriverBlocklist), pchar(rsDbk32Error), MB_ICONERROR or MB_YESNO)=IDYES then
                   begin
-                    shellexecute(0, 'open', 'https://cheatengine.org/dbkerror.php', nil, nil, sw_show);
+                    shellexecute(0, 'open', 'https://localhost/dbkerror.php', nil, nil, sw_show);
                   end;
                 end
                 else

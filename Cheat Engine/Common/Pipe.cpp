@@ -35,8 +35,8 @@ Pipe::~Pipe(void)
 #endif
 		pipehandle=0;
 	}
-	
-    
+
+	DeleteCriticalSection(&cs);
 }
 
 void Pipe::Lock(void)
@@ -57,7 +57,7 @@ void Pipe::Read(PVOID buf, unsigned int count)
 
 	while (totalread < count)
 	{
-		if (ReadFile(pipehandle, buf, count, &br, NULL) == FALSE)
+		if (ReadFile(pipehandle, buf, count - totalread, &br, NULL) == FALSE)
 			throw("Read Error");
 
 		totalread += br;
@@ -73,7 +73,7 @@ void Pipe::Write(PVOID buf, unsigned int count)
 
 	while (totalwritten < count)
 	{
-		if (WriteFile(pipehandle, buf, count, &bw, NULL) == FALSE)
+		if (WriteFile(pipehandle, buf, count - totalwritten, &bw, NULL) == FALSE)
 			throw("Write Error");
 
 		totalwritten += bw;

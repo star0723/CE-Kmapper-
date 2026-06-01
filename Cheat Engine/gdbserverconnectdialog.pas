@@ -1,4 +1,4 @@
-//Copyright Cheat Engine 2023
+//Copyright DataViewer 2023
 
 unit gdbserverconnectdialog;
 

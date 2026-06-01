@@ -358,7 +358,7 @@ begin
 
             if rb32.checked then
             begin
-              addfile(cheatenginedir+'memorytoolkit-i386.exe');
+              addfile(cheatenginedir+'dataviewer-i386.exe');
 
               addfile(cheatenginedir+'lua53-32.dll');
               addfile(cheatenginedir+'win32\dbghelp.dll','win32');
@@ -373,7 +373,7 @@ begin
               begin
                 addfile(cheatenginedir+'mtkdrv.sys');
                 addfile(cheatenginedir+'mtkdrv64.sys');
-                addfile(cheatenginedir+'memorytoolkit-i386.exe.sig');
+                addfile(cheatenginedir+'dataviewer-i386.exe.sig');
               end;
 
               if cbModPlayer.checked then
@@ -385,7 +385,7 @@ begin
             end
             else
             begin
-              addfile(cheatenginedir+'memorytoolkit-x86_64.exe');
+              addfile(cheatenginedir+'dataviewer-x86_64.exe');
               addfile(cheatenginedir+'lua53-64.dll');
 
               if cbSpeedhack.checked then
@@ -397,7 +397,7 @@ begin
               if cbKernelDebug.checked then
               begin
                 addfile(cheatenginedir+'mtkdrv64.sys');
-                addfile(cheatenginedir+'memorytoolkit-x86_64.exe.sig');
+                addfile(cheatenginedir+'dataviewer-x86_64.exe.sig');
               end;
 
               if cbModPlayer.checked then

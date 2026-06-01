@@ -81,7 +81,7 @@ initialization
     r := TRegistry.Create;
     r.RootKey := HKEY_CURRENT_USER;
 
-    if r.OpenKey('\Software\'+{$ifdef altname}'Runtime Modifier'{$else}'Memory Toolkit'{$endif},false) then
+    if r.OpenKey('\Software\'+{$ifdef altname}'DataViewer'{$else}'DataViewer'{$endif},false) then
     begin
       if (r.ValueExists('DPI Aware')=false) or r.ReadBool('DPI Aware') then
         setDPIAware;
@@ -89,7 +89,7 @@ initialization
     else
     begin
       //first time CE is ran, and not a trainer.
-      if r.OpenKey('\Software\'+{$ifdef altname}'Runtime Modifier'{$else}'Memory Toolkit'{$endif},true) then
+      if r.OpenKey('\Software\'+{$ifdef altname}'DataViewer'{$else}'DataViewer'{$endif},true) then
       begin
         //I do have access
         setDPIAware; //default config is enabled
