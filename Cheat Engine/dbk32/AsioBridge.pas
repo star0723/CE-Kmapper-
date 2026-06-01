@@ -150,6 +150,11 @@ function AsioVqeLookup(address: QWord;
                        var allocBase, baseAddr, regionSize: QWord;
                        var state, protect, rtype, allocProtect: uint32): boolean;
 
+// Hardware breakpoint via R0 pipe (bypasses SetThreadContext on target)
+function AsioHwbpSet(tid: uint32; drIndex: uint8; va: QWord;
+                     condition: uint8; len: uint8): boolean;
+function AsioHwbpClear(tid: uint32; drIndex: uint8): boolean;
+
 function AsioGetLastError: string;
 
 implementation
@@ -887,6 +892,57 @@ begin
   if resp.hit_count > 0 then
     Move(respBuf[sizeof(resp)], hits[0], resp.hit_count * sizeof(uint64));
   result := true;
+end;
+
+function AsioHwbpSet(tid: uint32; drIndex: uint8; va: QWord;
+                     condition: uint8; len: uint8): boolean;
+var
+  req: packed record
+    r_tid: uint32;
+    r_dr_index: uint8;
+    r_condition: uint8;
+    r_length: uint8;
+    r_reserved: uint8;
+    r_va: uint64;
+  end;
+  respSize: uint64;
+  status: int32;
+begin
+  result := false;
+  if not AsioIsConnected then exit;
+  req.r_tid := tid;
+  req.r_dr_index := drIndex;
+  req.r_condition := condition;
+  req.r_length := len;
+  req.r_reserved := 0;
+  req.r_va := va;
+  result := SendRecv(ASIO_OP_HWBP_SET, req, sizeof(req), req, 0, respSize, status);
+  if status <> ASIO_OK then
+    lastError := 'HwbpSet: ' + IntToStr(status);
+  result := result and (status = ASIO_OK);
+end;
+
+function AsioHwbpClear(tid: uint32; drIndex: uint8): boolean;
+var
+  req: packed record
+    r_tid: uint32;
+    r_dr_index: uint8;
+    r_reserved: array[0..2] of uint8;
+  end;
+  respSize: uint64;
+  status: int32;
+begin
+  result := false;
+  if not AsioIsConnected then exit;
+  req.r_tid := tid;
+  req.r_dr_index := drIndex;
+  req.r_reserved[0] := 0;
+  req.r_reserved[1] := 0;
+  req.r_reserved[2] := 0;
+  result := SendRecv(ASIO_OP_HWBP_CLEAR, req, sizeof(req), req, 0, respSize, status);
+  if status <> ASIO_OK then
+    lastError := 'HwbpClear: ' + IntToStr(status);
+  result := result and (status = ASIO_OK);
 end;
 
 end.
