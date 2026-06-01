@@ -134,7 +134,7 @@ function AsioScanNext(scanOp: uint8; valueLo, valueHi: QWord;
 // VQE cache: attach 时一次性加载, 后续纯本地查询
 function AsioPreloadRegionCache: boolean;
 function AsioVqeLookup(address: QWord;
-                       var baseAddr, regionSize: QWord;
+                       var allocBase, baseAddr, regionSize: QWord;
                        var state, protect, rtype, allocProtect: uint32): boolean;
 
 function AsioGetLastError: string;
@@ -213,11 +213,35 @@ var
   hPipe: THandle = INVALID_HANDLE_VALUE;
   lastError: string = '';
   attachedPid: uint32 = 0;
+  pipeCS: TRTLCriticalSection;
+  pipeCsInit: boolean = false;
 
   // VQE region cache — sorted by base, binary searched
   regionCache: TRegionArray = nil;
   regionCacheCount: integer = 0;
   regionCacheValid: boolean = false;
+
+procedure EnsurePipeCS;
+begin
+  if not pipeCsInit then
+  begin
+    InitCriticalSection(pipeCS);
+    pipeCsInit := true;
+  end;
+end;
+
+procedure PipeDrain(h: THandle; remaining: uint64);
+var
+  buf: array[0..4095] of byte;
+  toRead, got: DWORD;
+begin
+  while remaining > 0 do
+  begin
+    if remaining > sizeof(buf) then toRead := sizeof(buf) else toRead := DWORD(remaining);
+    if not ReadFile(h, buf[0], toRead, got, nil) or (got = 0) then break;
+    dec(remaining, got);
+  end;
+end;
 
 function AsioGetLastError: string;
 begin
@@ -233,7 +257,7 @@ begin
   while size > 0 do
   begin
     if size > $10000 then toWrite := $10000 else toWrite := DWORD(size);
-    if not WriteFile(h, p^, toWrite, written, nil) or (written <> toWrite) then
+    if not WriteFile(h, p^, toWrite, written, nil) or (written = 0) then
     begin
       lastError := 'PipeWriteAll: ' + SysErrorMessage(GetLastError);
       exit(false);
@@ -278,36 +302,43 @@ begin
     exit;
   end;
 
-  hdr.magic := ASIO_R0_REQ_MAGIC;
-  hdr.version := ASIO_R0_PROTO_VERSION;
-  hdr.opcode := opcode;
-  hdr.reserved := 0;
-  hdr.payload_len := reqSize;
+  EnsurePipeCS;
+  EnterCriticalSection(pipeCS);
+  try
+    hdr.magic := ASIO_R0_REQ_MAGIC;
+    hdr.version := ASIO_R0_PROTO_VERSION;
+    hdr.opcode := opcode;
+    hdr.reserved := 0;
+    hdr.payload_len := reqSize;
 
-  if not PipeWriteAll(hPipe, hdr, sizeof(hdr)) then exit;
-  if (reqSize > 0) and not PipeWriteAll(hPipe, reqData, reqSize) then exit;
+    if not PipeWriteAll(hPipe, hdr, sizeof(hdr)) then exit;
+    if (reqSize > 0) and not PipeWriteAll(hPipe, reqData, reqSize) then exit;
 
-  if not PipeReadAll(hPipe, resp, sizeof(resp)) then exit;
-  if resp.magic <> ASIO_R0_RSP_MAGIC then
-  begin
-    lastError := 'Bad response magic';
-    exit;
-  end;
-
-  status := resp.status;
-  respSize := resp.payload_len;
-
-  if respSize > 0 then
-  begin
-    if respSize > respCapacity then
+    if not PipeReadAll(hPipe, resp, sizeof(resp)) then exit;
+    if resp.magic <> ASIO_R0_RSP_MAGIC then
     begin
-      lastError := 'Response too large';
+      lastError := 'Bad response magic';
       exit;
     end;
-    if not PipeReadAll(hPipe, respData, respSize) then exit;
-  end;
 
-  result := true;
+    status := resp.status;
+    respSize := resp.payload_len;
+
+    if respSize > 0 then
+    begin
+      if respSize > respCapacity then
+      begin
+        PipeDrain(hPipe, respSize);
+        lastError := 'Response too large';
+        exit;
+      end;
+      if not PipeReadAll(hPipe, respData, respSize) then exit;
+    end;
+
+    result := true;
+  finally
+    LeaveCriticalSection(pipeCS);
+  end;
 end;
 
 function SendRecvNoPayload(opcode: uint32; var respData; respCapacity: uint64;
@@ -353,9 +384,18 @@ begin
 end;
 
 procedure AsioDisconnect;
+var
+  hdr: TAsioR0Header;
+  written: DWORD;
 begin
   if hPipe <> INVALID_HANDLE_VALUE then
   begin
+    hdr.magic := ASIO_R0_REQ_MAGIC;
+    hdr.version := ASIO_R0_PROTO_VERSION;
+    hdr.opcode := ASIO_OP_SHUTDOWN;
+    hdr.reserved := 0;
+    hdr.payload_len := 0;
+    WriteFile(hPipe, hdr, sizeof(hdr), written, nil);
     CloseHandle(hPipe);
     hPipe := INVALID_HANDLE_VALUE;
   end;
@@ -494,6 +534,9 @@ begin
 
   Move(respBuf[0], header, sizeof(header));
   count := header.count;
+  // Validate count against actual response size to prevent buffer overread
+  if count > integer((respSize - sizeof(header)) div sizeof(TAsioProcEntry)) then
+    count := integer((respSize - sizeof(header)) div sizeof(TAsioProcEntry));
   SetLength(procs, count);
   if count > 0 then
     Move(respBuf[sizeof(header)], procs[0], count * sizeof(TAsioProcEntry));
@@ -523,6 +566,9 @@ begin
 
   Move(respBuf[0], header, sizeof(header));
   regionCacheCount := header.count;
+  // Validate count against actual response size to prevent buffer overread
+  if regionCacheCount > integer((respSize - sizeof(header)) div sizeof(TAsioR0RegionEntry)) then
+    regionCacheCount := integer((respSize - sizeof(header)) div sizeof(TAsioR0RegionEntry));
   SetLength(regionCache, regionCacheCount);
   if regionCacheCount > 0 then
     Move(respBuf[sizeof(header)], regionCache[0],
@@ -533,7 +579,7 @@ end;
 
 // Binary search: find region whose base <= address < base+region_size
 function AsioVqeLookup(address: QWord;
-                       var baseAddr, regionSize: QWord;
+                       var allocBase, baseAddr, regionSize: QWord;
                        var state, protect, rtype, allocProtect: uint32): boolean;
 var
   lo, hi, mid: integer;
@@ -559,6 +605,7 @@ begin
     else
     begin
       // Found
+      allocBase := e.allocation_base;
       baseAddr := e.base;
       regionSize := e.region_size;
       state := e.state;
@@ -569,6 +616,7 @@ begin
     end;
   end;
   // Not in any committed region → MEM_FREE
+  allocBase := address and $FFFFFFFFFFFFF000;
   baseAddr := address and $FFFFFFFFFFFFF000;
   regionSize := $1000;
   state := $10000; // MEM_FREE

@@ -2219,7 +2219,7 @@ var
   l: THandleListEntry;
   validhandle: boolean;
 
-  ba, rs: QWord;
+  ab, ba, rs: QWord;
   st, pr, tp, ap: uint32;
 begin
   result:=0;
@@ -2227,10 +2227,10 @@ begin
   // asio path: pure cache lookup, zero IPC, zero syscall
   if AsioReady then
   begin
-    if AsioVqeLookup(ptrUint(address), ba, rs, st, pr, tp, ap) then
+    if AsioVqeLookup(ptrUint(address), ab, ba, rs, st, pr, tp, ap) then
     begin
       mbi.BaseAddress := pointer(ba);
-      mbi.AllocationBase := pointer(ba);
+      mbi.AllocationBase := pointer(ab);
       mbi.AllocationProtect := ap;
       mbi.RegionSize := rs;
       mbi.State := st;
