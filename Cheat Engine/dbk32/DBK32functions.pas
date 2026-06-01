@@ -481,6 +481,7 @@ end;
 function isDriverLoaded(SigningIsTheCause: PBOOL): BOOL; stdcall;
 begin
   result:=true;
+  if AsioReady then exit;  // AsioR0 pipe active — no kernel driver needed
   if hdevice=INVALID_HANDLE_VALUE then
   begin
     if SigningIsTheCause<>nil then
@@ -506,7 +507,7 @@ end;
 
 function GetLoadedState: BOOLEAN; stdcall;
 begin
-  result:=(hdevice<>INVALID_HANDLE_VALUE);
+  result:=AsioReady or (hdevice<>INVALID_HANDLE_VALUE);
 end;
 
 {$W+}

@@ -8511,7 +8511,6 @@ begin
   begin
     reg.WriteBool('First Time User', False);
 
-
     if formsettings.lbLanguages.Count>1 then
     begin
       i:=ShowSelectionList(self, rsLanguage, rsChooseLanguage, formSettings.lbLanguages.Items, s);
@@ -8522,17 +8521,7 @@ begin
       end;
     end;
 
-
-    if messagedlg(rsTryTutorial, mtConfirmation, [mbYes, mbNo], 0) = mrYes then
-    {$ifdef darwin}
-      miTutorial64.click;
-    {$else}
-      {$ifdef cpu32}
-      miTutorial.Click;
-      {$else}
-      miTutorial64.Click;
-      {$endif}
-    {$endif}
+    // Tutorial dialog removed — skip first-time tutorial prompt
   end;
 
   if reg.ValueExists('Show previous value column') then
@@ -8629,6 +8618,7 @@ begin
 
   //SMenu:=GetSystemMenu(handle,false);
   cleanrun:=autosize;
+  try
   autosize:=false;
 
 
@@ -8964,6 +8954,11 @@ begin
     caption:=caption+' (Admin)';
 
   askAboutRunningAsAdmin:=true;
+
+  except
+    on E: EAccessViolation do
+      OutputDebugString('FormShow: suppressed layout AV (non-fatal): ' + E.Message);
+  end;
 
 end;
 
