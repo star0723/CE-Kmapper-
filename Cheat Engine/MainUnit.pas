@@ -856,6 +856,10 @@ type
     speedhackDisableTimer: TTimer;
     boundsupdater: TTimer;
 
+    procedure sbConnectPipeClick(Sender: TObject);
+  private
+    sbConnectPipe: TSpeedButton;
+
     freezeThread: TFreezeThread;
 
     showStaticAsStatic: boolean;
@@ -1116,7 +1120,7 @@ uses cefuncproc, MainUnit2, ProcessWindowUnit, MemoryBrowserFormUnit, TypePopup,
   FoundCodeUnit, AdvancedOptionsUnit, frmProcessWatcherUnit,
   formPointerOrPointeeUnit, OpenSave, formmemoryregionsunit, formProcessInfo,
   PasteTableentryFRM, pointerscannerfrm, PointerscannerSettingsFrm,
-  frmFloatingPointPanelUnit, pluginexports {$ifdef windows},DBK32functions, frmUltimapUnit,
+  frmFloatingPointPanelUnit, pluginexports {$ifdef windows},DBK32functions, AsioBridge, frmUltimapUnit,
   frmSetCrosshairUnit{$endif},StructuresFrm2 {$ifdef windows} ,frmMemoryViewExUnit,
   frmD3DHookSnapshotConfigUnit,frmSaveSnapshotsUnit, frmsnapshothandlerUnit,
   frmNetworkDataCompressionUnit{$endif},ProcessHandlerUnit, processlist, pointeraddresslist,
@@ -5925,6 +5929,21 @@ begin
 
 end;
 
+procedure TMainForm.sbConnectPipeClick(Sender: TObject);
+begin
+  {$ifdef windows}
+  LoadDBK32;
+  if AsioReady then
+  begin
+    sbConnectPipe.Caption := 'Connected';
+    sbConnectPipe.Enabled := false;
+    OutputDebugString('Pipe connected successfully via manual button');
+  end
+  else
+    MessageDlg('Pipe connection failed. Make sure the server is running.',
+               mtError, [mbOK], 0);
+  {$endif}
+end;
 
 procedure TMainForm.FormCreate(Sender: TObject);
 var
@@ -6434,6 +6453,30 @@ begin
   cbPresentMemoryOnly.Visible:=false;
   sbClearActiveMemory.visible:=false;
 
+  {$endif}
+
+  // Hide CE-specific speedhack/unrandomizer controls (anti-detection)
+  {$ifdef windows}
+  cbSpeedhack.Visible := false;
+  btnSetSpeedhack2.Visible := false;
+  editSH2.Visible := false;
+  tbSpeed.Visible := false;
+  cbUnrandomizer.Visible := false;
+  if Panel10 <> nil then
+    Panel10.Visible := false;
+
+  // Create manual pipe connect button next to the open-process button
+  sbConnectPipe := TSpeedButton.Create(self);
+  sbConnectPipe.Parent := Panel7;
+  sbConnectPipe.Left := sbOpenProcess.Left + sbOpenProcess.Width + 3;
+  sbConnectPipe.Top := sbOpenProcess.Top;
+  sbConnectPipe.Width := 80;
+  sbConnectPipe.Height := sbOpenProcess.Height;
+  sbConnectPipe.Caption := 'Connect';
+  sbConnectPipe.Hint := 'Connect to R0 pipe server';
+  sbConnectPipe.ShowHint := true;
+  sbConnectPipe.OnClick := @sbConnectPipeClick;
+  Panel7.AutoSize := true;
   {$endif}
 end;
 
