@@ -439,8 +439,6 @@ begin
     sl.LoadFromFile(hintPath);
     if sl.Count > 0 then
       result := Trim(sl[0]);
-    // Delete hint file after reading (reduce forensic trace)
-    DeleteFile(hintPath);
   finally
     sl.Free;
   end;
