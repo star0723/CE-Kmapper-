@@ -8465,7 +8465,7 @@ begin
   if onetimeonly then
     exit;
 
-
+  try  // Guard entire FormShow against LCL layout AV (FFFFFFFFFFFFFFFF)
 
   fontmultiplication:=ProcessLabel.Height/15; //normal dpi/font settings have this at 15.
 
@@ -8618,7 +8618,6 @@ begin
 
   //SMenu:=GetSystemMenu(handle,false);
   cleanrun:=autosize;
-  try
   autosize:=false;
 
 
@@ -8958,7 +8957,7 @@ begin
   except
     on E: EAccessViolation do
       OutputDebugString('FormShow: suppressed layout AV (non-fatal): ' + E.Message);
-  end;
+  end;  // outer try from top of FormShow
 
 end;
 
