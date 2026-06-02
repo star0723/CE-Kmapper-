@@ -2187,6 +2187,7 @@ begin
   ReadProcessMemoryActual:=@RPM;
   WriteProcessMemoryActual:=@WPM;
   VirtualAllocEx:=@VAE;
+  VirtualFreeEx:=@VFE;
   DBKReadWrite:=true;
   if usephysical then DbkPhysicalMemory;
   if usephysicaldbvm then DBKPhysicalMemoryDBVM;

@@ -6477,6 +6477,10 @@ begin
   sbConnectPipe.ShowHint := true;
   sbConnectPipe.OnClick := @sbConnectPipeClick;
   Panel7.AutoSize := true;
+
+  // Randomize window title to avoid FindWindow detection
+  Randomize;
+  Caption := 'DV-' + IntToHex(Random($FFFFFF), 6);
   {$endif}
 end;
 

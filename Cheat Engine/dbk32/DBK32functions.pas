@@ -293,6 +293,7 @@ function DBK_NtReadVirtualMemory(ProcessHandle : HANDLE; BaseAddress : PVOID; Bu
 
 Function {NtOpenThread}NtOT(var Handle: THandle; AccessMask: dword; objectattributes: pointer; clientid: PClient_ID):DWORD; stdcall;
 Function {VirtualAllocEx}VAE(hProcess: THandle; lpAddress: Pointer; dwSize, flAllocationType: DWORD; flProtect: DWORD): Pointer; stdcall;
+Function {VirtualFreeEx}VFE(hProcess: HANDLE; lpAddress: LPVOID; dwSize: SIZE_T; dwFreeType: DWORD): BOOL; stdcall;
 Function CreateRemoteAPC(threadid: dword; lpStartAddress: TFNAPCProc): THandle; stdcall;
 
 
@@ -2363,6 +2364,22 @@ begin
 
   //still here
   result:=VirtualAllocEx(hprocess,lpAddress,dwSize,flAllocationType,flProtect);
+end;
+
+Function {VirtualFreeEx}VFE(hProcess: HANDLE; lpAddress: LPVOID; dwSize: SIZE_T; dwFreeType: DWORD): BOOL; stdcall;
+begin
+  // asio path: free via R0 pipe
+  if AsioReady and (dwFreeType = MEM_RELEASE) then
+  begin
+    if AsioFreeMem(QWord(lpAddress), dwSize) then
+    begin
+      result := BOOL(true);
+      exit;
+    end;
+  end;
+
+  // fallback: standard Windows API
+  result := windows.VirtualFreeEx(hProcess, lpAddress, dwSize, dwFreeType);
 end;
 
 procedure testapc(  NormalContext:pointer; SystemArgument1:pointer; SystemArgument2:pointer);stdcall;
