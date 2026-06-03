@@ -1909,8 +1909,9 @@ begin
   begin
     if AsioAttach(dwProcessId, cr3, imgBase, imgSize) then
     begin
-      // Pre-load VQE region cache (one bulk PTE scan, cached locally)
-      AsioPreloadRegionCache;
+      // VQE region cache will be loaded lazily on first VQE call
+      // (removed synchronous AsioPreloadRegionCache — it blocks the GUI
+      //  for seconds during full page-table walk)
 
       // Return a pseudo handle mapped to this PID
       result := InterLockedIncrement(NextPseudoHandle);
