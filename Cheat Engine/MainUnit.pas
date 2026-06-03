@@ -6456,27 +6456,38 @@ begin
   {$endif}
 
   // Hide CE-specific speedhack/unrandomizer controls (anti-detection)
+  // DisableAutoSizing prevents LCL layout engine from running during bulk
+  // visibility changes — avoids AV in DoAutoSize/GetMoveDiffForNonAlignedChilds
   {$ifdef windows}
-  cbSpeedhack.Visible := false;
-  btnSetSpeedhack2.Visible := false;
-  editSH2.Visible := false;
-  tbSpeed.Visible := false;
-  cbUnrandomizer.Visible := false;
-  if Panel10 <> nil then
-    Panel10.Visible := false;
+  try
+    DisableAutoSizing{$IFDEF EnableAutoSizingOverloaded}('AntiDetect'){$ENDIF};
+    try
+      cbSpeedhack.Visible := false;
+      btnSetSpeedhack2.Visible := false;
+      editSH2.Visible := false;
+      tbSpeed.Visible := false;
+      cbUnrandomizer.Visible := false;
+      if Panel10 <> nil then
+        Panel10.Visible := false;
 
-  // Create manual pipe connect button next to the open-process button
-  sbConnectPipe := TSpeedButton.Create(self);
-  sbConnectPipe.Parent := Panel7;
-  sbConnectPipe.Left := sbOpenProcess.Left + sbOpenProcess.Width + 3;
-  sbConnectPipe.Top := sbOpenProcess.Top;
-  sbConnectPipe.Width := 80;
-  sbConnectPipe.Height := sbOpenProcess.Height;
-  sbConnectPipe.Caption := 'Connect';
-  sbConnectPipe.Hint := 'Connect to R0 pipe server';
-  sbConnectPipe.ShowHint := true;
-  sbConnectPipe.OnClick := @sbConnectPipeClick;
-  Panel7.AutoSize := true;
+      // Create manual pipe connect button next to the open-process button
+      sbConnectPipe := TSpeedButton.Create(self);
+      sbConnectPipe.Parent := Panel7;
+      sbConnectPipe.Left := sbOpenProcess.Left + sbOpenProcess.Width + 3;
+      sbConnectPipe.Top := sbOpenProcess.Top;
+      sbConnectPipe.Width := 80;
+      sbConnectPipe.Height := sbOpenProcess.Height;
+      sbConnectPipe.Caption := 'Connect';
+      sbConnectPipe.Hint := 'Connect to R0 pipe server';
+      sbConnectPipe.ShowHint := true;
+      sbConnectPipe.OnClick := @sbConnectPipeClick;
+    finally
+      EnableAutoSizing{$IFDEF EnableAutoSizingOverloaded}('AntiDetect'){$ENDIF};
+    end;
+  except
+    on E: Exception do
+      OutputDebugString('FormCreate: suppressed layout exception: ' + E.Message);
+  end;
 
   // Randomize window title to avoid FindWindow detection
   Randomize;
