@@ -2473,6 +2473,17 @@ var
   s: string;
   op: string;
 begin
+  {$ifdef windows}
+  // Suppress known LCL layout AV (address FFFFFFFFFFFFFFFF / -1) — non-fatal
+  if (e is EAccessViolation) and
+     (EAccessViolation(e).ExceptionRecord <> nil) and
+     (EAccessViolation(e).ExceptionRecord^.ExceptionInformation[1] = QWORD($FFFFFFFFFFFFFFFF)) then
+  begin
+    OutputDebugString('Suppressed LCL layout AV (FFFFFFFFFFFFFFFF) — non-fatal');
+    exit;
+  end;
+  {$endif}
+
   //unhandled exeption. Also clean lua stack
   s:={$ifdef THREADNAMESUPPORT}GetThreadName+': '+{$endif}'Unhandled exception: '+e.message+' (Exception class '+ e.ClassName+')';
 
@@ -3285,6 +3296,14 @@ var
   oldprocesshandle: thandle;
   oldprocessname: string;
 begin
+  {$ifdef windows}
+  if not AsioReady then
+  begin
+    MessageDlg('R0 pipe not connected. Click "Connect" first to enable process selection.',
+               mtWarning, [mbOK], 0);
+    exit;
+  end;
+  {$endif}
   if not openprocessPrologue then
     exit;
 
@@ -5498,11 +5517,8 @@ begin
     scantablist.AnchorSideLeft.Control:=panel5;
     scantablist.AnchorSideLeft.Side:=asrLeft;
 
-    scantablist.AnchorSideRight.Control:=logopanel;
-    if scantabtopcontrol.Top+scantabtopcontrol.Height<(logopanel.Height-4) then
-      scantablist.AnchorSideRight.Side:=asrLeft
-    else
-      scantablist.AnchorSideRight.Side:=asrRight; //it can go under the logo
+    scantablist.AnchorSideRight.Control:=Panel5;
+    scantablist.AnchorSideRight.Side:=asrRight;
 
     scantablist.BorderSpacing.Top:=4;
 
@@ -5930,17 +5946,34 @@ begin
 end;
 
 procedure TMainForm.sbConnectPipeClick(Sender: TObject);
+var
+  pipeName: string;
 begin
   {$ifdef windows}
-  LoadDBK32;
   if AsioReady then
   begin
-    sbConnectPipe.Caption := 'Connected';
+    sbConnectPipe.Caption := 'R0';
+    exit;
+  end;
+  pipeName := '\\.\pipe\';
+  if not InputQuery('Connect to R0 Pipe', 'Pipe name (e.g. \\.\pipe\abc123):', pipeName) then
+    exit;
+  if pipeName = '' then exit;
+  // Connect directly via AsioConnect — no LoadDBK32 / no admin / no driver
+  if AsioConnect(pipeName) then
+  begin
+    // Hook all function pointers to use R0 paths
+    DBKLoaded := true;
+    UseDBKQueryMemoryRegion;
+    UseDBKReadWriteMemory;
+    sbConnectPipe.Caption := 'R0';
     sbConnectPipe.Enabled := false;
-    OutputDebugString('Pipe connected successfully via manual button');
+    ProcessLabel.Caption := 'R0 Connected';
+    OutputDebugString('Pipe connected: ' + pipeName);
   end
   else
-    MessageDlg('Pipe connection failed. Make sure the server is running.',
+    MessageDlg('Connection failed: ' + pipeName + #13#10 +
+               'Make sure asio_kdmapper --server is running.',
                mtError, [mbOK], 0);
   {$endif}
 end;
@@ -6310,9 +6343,11 @@ begin
 
   ProcessHandler.ProcessHandle := 0;
 
-  logo.Hint := strClickToGoHome;
-
-  logo.ShowHint := True;
+  // Hide CE logo — anti-detection
+  Logo.Visible := false;
+  Logo.OnClick := nil;
+  LogoPanel.Width := 0;
+  LogoPanel.Visible := false;
 
   newaddress := 0;
 
@@ -6326,10 +6361,9 @@ begin
   hookedin := False;
 
   //allignment fixes for some window style's that mess up with thick borders (like vista)
-  differentWidth := logopanel.left - (clientwidth - logopanel.Width);
+  differentWidth := 0;
   btnAddAddressManually.Left := clientwidth - btnAddAddressManually.Width;
   commentbutton.left := clientwidth - commentbutton.Width;
-  logopanel.left := clientwidth - logopanel.Width;
   ProgressBar.Width := ProgressBar.Width - differentwidth;
   undoscan.left := undoscan.left - differentwidth;
 
@@ -6470,6 +6504,20 @@ begin
       if Panel10 <> nil then
         Panel10.Visible := false;
 
+      // Replace all toolbar icon buttons with text-only (remove image list refs)
+      sbOpenProcess.Images := nil;
+      sbOpenProcess.Caption := 'Open';
+      sbOpenProcess.Width := 50;
+      LoadButton.Images := nil;
+      LoadButton.Caption := 'Load';
+      LoadButton.Width := 50;
+      SaveButton.Images := nil;
+      SaveButton.Caption := 'Save';
+      SaveButton.Width := 50;
+
+      // Hide SettingsButton on LogoPanel (it's anchored to the now-hidden logo)
+      SettingsButton.Visible := false;
+
       // Create manual pipe connect button next to the open-process button
       sbConnectPipe := TSpeedButton.Create(self);
       sbConnectPipe.Parent := Panel7;
@@ -6478,8 +6526,7 @@ begin
       sbConnectPipe.Width := 80;
       sbConnectPipe.Height := sbOpenProcess.Height;
       sbConnectPipe.Caption := 'Connect';
-      sbConnectPipe.Hint := 'Connect to R0 pipe server';
-      sbConnectPipe.ShowHint := true;
+      sbConnectPipe.Flat := true;
       sbConnectPipe.OnClick := @sbConnectPipeClick;
     finally
       EnableAutoSizing{$IFDEF EnableAutoSizingOverloaded}('AntiDetect'){$ENDIF};
@@ -8916,9 +8963,12 @@ begin
 
   ProgressBar.height:=scaley(ProgressBar.height, 96);
 
-  i:=((logopanel.Top+logopanel.height)-scanvalue.top)+2;
-  if i>0 then
-    scantext.BorderSpacing.Top:=scantext.BorderSpacing.Top+i;
+  if LogoPanel.Visible then
+  begin
+    i:=((logopanel.Top+logopanel.height)-scanvalue.top)+2;
+    if i>0 then
+      scantext.BorderSpacing.Top:=scantext.BorderSpacing.Top+i;
+  end;
 
   if pnlScanValueOptions.top+pnlScanValueOptions.Height>scanvalue.top+scanvalue.height then
     scantype.AnchorSideTop.Control:=pnlScanValueOptions
@@ -10443,6 +10493,14 @@ var
   fastscanmethod: TFastscanmethod;
 begin
   {$ifdef windows}
+  // Block scanning if R0 pipe is not connected — prevents R3 API exposure
+  if not AsioReady then
+  begin
+    MessageDlg('R0 pipe not connected. Click "Connect" first and enter the pipe name.',
+               mtWarning, [mbOK], 0);
+    exit;
+  end;
+
   if aprilfools then decreaseCheatECoinCount;
 
   QueryPerformanceCounter(scantimestart);
@@ -10733,6 +10791,12 @@ var
   percentage: boolean;
 begin
   {$ifdef windows}
+  if not AsioReady then
+  begin
+    MessageDlg('R0 pipe not connected. Click "Connect" first.',
+               mtWarning, [mbOK], 0);
+    exit;
+  end;
   if aprilfools then decreaseCheatECoinCount;
   {$endif}
 
