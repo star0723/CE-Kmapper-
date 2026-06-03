@@ -2243,31 +2243,17 @@ begin
     end
     else
     begin
-      // Cache miss: refresh cache and retry (never fall through to R3)
-      AsioPreloadRegionCache;
-      if AsioVqeLookup(ptrUint(address), ab, ba, rs, st, pr, tp, ap) then
-      begin
-        mbi.BaseAddress := pointer(ba);
-        mbi.AllocationBase := pointer(ab);
-        mbi.AllocationProtect := ap;
-        mbi.RegionSize := rs;
-        mbi.State := st;
-        mbi.Protect := pr;
-        mbi._Type := tp;
-        result := sizeof(mbi);
-      end
-      else
-      begin
-        // Address not mapped: return MEM_FREE (no R3 fallback)
-        mbi.BaseAddress := pointer((ptrUint(address) div $1000) * $1000);
-        mbi.AllocationBase := nil;
-        mbi.AllocationProtect := 0;
-        mbi.RegionSize := $1000;
-        mbi.State := MEM_FREE;
-        mbi.Protect := PAGE_NOACCESS;
-        mbi._Type := 0;
-        result := sizeof(mbi);
-      end;
+      // Cache miss: launch async background load (non-blocking)
+      AsioEnsureRegionCacheAsync;
+      // Return MEM_FREE for now — cache will be ready on next query
+      mbi.BaseAddress := pointer((ptrUint(address) div $1000) * $1000);
+      mbi.AllocationBase := nil;
+      mbi.AllocationProtect := 0;
+      mbi.RegionSize := $1000;
+      mbi.State := MEM_FREE;
+      mbi.Protect := PAGE_NOACCESS;
+      mbi._Type := 0;
+      result := sizeof(mbi);
     end;
     exit;
   end;
