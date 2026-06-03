@@ -146,6 +146,8 @@ function AsioScanNext(scanOp: uint8; valueLo, valueHi: QWord;
 // VQE cache: attach 时一次性加载, 后续纯本地查询
 function AsioPreloadRegionCache: boolean;
 procedure AsioInvalidateRegionCache;
+procedure AsioEnsureRegionCacheAsync;  // non-blocking: launches background load if needed
+function AsioIsRegionCacheReady: boolean;
 function AsioVqeLookup(address: QWord;
                        var allocBase, baseAddr, regionSize: QWord;
                        var state, protect, rtype, allocProtect: uint32): boolean;
@@ -238,6 +240,7 @@ var
   regionCache: TRegionArray = nil;
   regionCacheCount: integer = 0;
   regionCacheValid: boolean = false;
+  regionCacheLoading: longint = 0;  // 1 while background thread is loading
   regionCacheTime: uint64 = 0;  // GetTickCount64 when cache was last loaded
   REGION_CACHE_TTL: uint64 = 30000; // auto-refresh after 30 seconds
 
@@ -733,6 +736,31 @@ begin
   regionCache := nil;
 end;
 
+function AsioIsRegionCacheReady: boolean;
+begin
+  result := regionCacheValid and (regionCacheLoading = 0);
+end;
+
+type
+  TRegionCacheLoaderThread = class(TThread)
+  protected
+    procedure Execute; override;
+  end;
+
+procedure TRegionCacheLoaderThread.Execute;
+begin
+  FreeOnTerminate := true;
+  AsioPreloadRegionCache;
+  InterlockedExchange(regionCacheLoading, 0);
+end;
+
+procedure AsioEnsureRegionCacheAsync;
+begin
+  if regionCacheValid then exit;
+  if InterlockedExchange(regionCacheLoading, 1) <> 0 then exit; // already loading
+  TRegionCacheLoaderThread.Create(false);
+end;
+
 // Binary search: find region whose base <= address < base+region_size
 function AsioVqeLookup(address: QWord;
                        var allocBase, baseAddr, regionSize: QWord;
@@ -745,7 +773,9 @@ begin
   if (not regionCacheValid) or
      (GetTickCount64 - regionCacheTime > REGION_CACHE_TTL) then
   begin
-    if not AsioPreloadRegionCache then exit;
+    // Non-blocking: launch async cache refresh, return false (cache miss)
+    AsioEnsureRegionCacheAsync;
+    exit;
   end;
 
   lo := 0;
