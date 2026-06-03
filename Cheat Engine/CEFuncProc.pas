@@ -705,6 +705,7 @@ function getathreadid(processid:dword):dword;
 var i: integer;
     ths: thandle;
     tE: threadentry32;
+    r0threads: TAsioThreadArray;
 begin
   {$ifdef windows}
   if frmProcessWatcher<>nil then
@@ -730,6 +731,18 @@ begin
   {$endif}
 
   //no exit yet, so use a enumeration of all threads and this processid
+  // R0 path
+  if AsioReady then
+  begin
+    if AsioEnumThreads(r0threads) then
+    begin
+      for i := 0 to High(r0threads) do
+      begin
+        result := r0threads[i].tid;
+        exit;
+      end;
+    end;
+  end;
 
   ths:=CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD,processid);
   if ths<>0 then
@@ -2438,8 +2451,20 @@ procedure GetThreadList(threadlist: TStrings);
 var
   ths: THandle;
   te32: THREADENTRY32;
+  r0threads: TAsioThreadArray;
+  j: integer;
 begin
   threadlist.clear;
+  // R0 path
+  if AsioReady then
+  begin
+    if AsioEnumThreads(r0threads) then
+    begin
+      for j := 0 to High(r0threads) do
+        threadlist.AddObject(inttohex(r0threads[j].tid, 1), TObject(PtrUInt(r0threads[j].tid)));
+      exit;
+    end;
+  end;
   ths:=CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD,processid);
   te32.dwSize:=sizeof(te32);
   if Thread32First(ths,te32) then
@@ -3565,9 +3590,34 @@ end;
 function getProcessPathFromProcessID(pid: dword): string;
 var ths: thandle;
     me32:MODULEENTRY32;
+    rawData: SysUtils.TBytes;
+    modCount: uint32;
+    nameLen: uint16;
+    modName: string;
+    off: integer;
 begin
   outputdebugstring('getProcessPathFromProcessID('+inttostr(pid)+')');
   result:='';
+  // R0 path: get first module name from AsioEnumModules
+  if AsioReady and AsioEnumModules(rawData) and (length(rawData) >= 8) then
+  begin
+    Move(rawData[0], modCount, 4);
+    if modCount > 0 then
+    begin
+      off := 8; // skip count(4) + reserved(4)
+      if off + 18 <= length(rawData) then
+      begin
+        Move(rawData[off + 16], nameLen, 2);
+        if (nameLen > 0) and (off + 18 + nameLen <= length(rawData)) then
+        begin
+          SetLength(modName, nameLen);
+          Move(rawData[off + 18], modName[1], nameLen);
+          result := modName;
+          exit;
+        end;
+      end;
+    end;
+  end;
   me32.dwSize:=sizeof(MODULEENTRY32);
   ths:=CreateToolhelp32Snapshot(TH32CS_SNAPMODULE or TH32CS_SNAPMODULE32,pid);
   if ths<>0 then
@@ -3589,8 +3639,33 @@ end;
 function getProcessnameFromProcessID(pid: dword): string;
 var ths: thandle;
     me32:MODULEENTRY32;
+    rawData: SysUtils.TBytes;
+    modCount: uint32;
+    nameLen: uint16;
+    modName: string;
+    off: integer;
 begin
   result:='???';
+  // R0 path
+  if AsioReady and AsioEnumModules(rawData) and (length(rawData) >= 8) then
+  begin
+    Move(rawData[0], modCount, 4);
+    if modCount > 0 then
+    begin
+      off := 8;
+      if off + 18 <= length(rawData) then
+      begin
+        Move(rawData[off + 16], nameLen, 2);
+        if (nameLen > 0) and (off + 18 + nameLen <= length(rawData)) then
+        begin
+          SetLength(modName, nameLen);
+          Move(rawData[off + 18], modName[1], nameLen);
+          result := ExtractFileName(modName);
+          exit;
+        end;
+      end;
+    end;
+  end;
   me32.dwSize:=sizeof(MODULEENTRY32);
   ths:=CreateToolhelp32Snapshot(TH32CS_SNAPMODULE or TH32CS_SNAPMODULE32,pid);
   if ths<>0 then
@@ -3669,8 +3744,18 @@ var
   ths: THandle;
   c: integer;
   te: TThreadEntry32;
+  r0threads: TAsioThreadArray;
 begin
   result:=0;
+  // R0 path
+  if AsioReady then
+  begin
+    if AsioEnumThreads(r0threads) then
+    begin
+      result := Length(r0threads);
+      exit;
+    end;
+  end;
   ths:=CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, pid);
 
   te.dwsize:=sizeof(te);;
@@ -3700,7 +3785,7 @@ var
   ths: thandle;
   te32: TThreadEntry32;
   i: integer;
-
+  r0threads: TAsioThreadArray;
 
   ldtentry: TLDTENTRY;
   mi: TModuleInfo;

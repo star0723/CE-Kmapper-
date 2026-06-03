@@ -439,8 +439,6 @@ begin
     sl.LoadFromFile(hintPath);
     if sl.Count > 0 then
       result := Trim(sl[0]);
-    // Delete hint file after reading (reduce forensic trace)
-    DeleteFile(hintPath);
   finally
     sl.Free;
   end;
@@ -466,7 +464,12 @@ begin
   if hintName <> '' then
   begin
     result := TryPipeConnect(hintName);
-    if result then exit;
+    if result then
+    begin
+      // Delete hint file after successful connection to avoid leaving pipe name on disk
+      DeleteFile(PChar(DeriveHintFilePath));
+      exit;
+    end;
   end;
 
   // 2. Try default pipe name
@@ -676,12 +679,13 @@ var
   end;
   respSize: uint64;
   status: int32;
+  dummy: byte;
 begin
   result := false;
   if not AsioIsConnected then exit;
   req.addr := va;
   req.sz := size;
-  result := SendRecv(ASIO_OP_FREE_MEM, req, sizeof(req), nil^, 0, respSize, status);
+  result := SendRecv(ASIO_OP_FREE_MEM, req, sizeof(req), dummy, 0, respSize, status);
   if status <> ASIO_OK then
     lastError := 'FreeMem: ' + IntToStr(status);
   result := result and (status = ASIO_OK);
